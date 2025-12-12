@@ -6,168 +6,142 @@ import { usePathname } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  ArrowRight,
-  Search,
-  Wind,
-  Zap,
-  Droplets,
-  User,
-  Building2,
-} from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import Image from "next/image";
+import Link from "next/link";
 
-// ✅ Imported local images
-import Form_Cleaning from "@/public/form_cleaning.png";
-import Gas_Filling from "@/public/gas_filling.png";
-import AC_Repair from "@/public/ac_repair.png";
-import AC_Coil_Servicing from "@/public/ac_coil_servicing.png";
-import AC_Deep_Water_Cleaning from "@/public/ac_deep_water_cleaning.png";
-import AC_Spare_Parts_Replacement from "@/public/ac_spare_part.png";
 import Emergency_Icon from "@/public/white_emergency.svg";
+import PlaceholderImage from "@/public/placeholder.jpg";
 
-type SubService = {
-  id: string; // ✅ added id
-  title: string;
-  image: any;
-};
+import apiClient from "@/lib/apiClient";
+
+// ================== TYPES ==================
 
 type Category = {
   id: string;
   title: string;
-  icon: React.ComponentType<{ className?: string }>;
-  subServices: SubService[];
+  icon: string;
+  type: "Enquiry" | "Subscription";
+  subServices: {
+    id: string;
+    title: string;
+    image: string;
+    slug: string;
+  }[];
 };
+
+type ApiSubService = {
+  id: string;
+  title: string;
+  sub_service_slug: string;
+  image_url?: string | null;
+};
+
+type ApiService = {
+  id: string;
+  title: string;
+  service_slug: string;
+  image_url?: string | null;
+  category?: string | null;
+  type?: "Enquiry" | "Subscription" | string | null;
+  sub_services?: ApiSubService[];
+};
+
+// ================== COMPONENT ==================
 
 export default function AllServices() {
   const pathname = usePathname();
-  
-  const categories: Category[] = [
-    {
-      id: "ac",
-      title: "Air Conditioning Services",
-      icon: Wind,
-      subServices: [
-        { id: "foam-cleaning", title: "Foam Cleaning", image: Form_Cleaning },
-        { id: "gas-filling", title: "Gas Filling", image: Gas_Filling },
-        { id: "ac-repair", title: "AC Repair", image: AC_Repair },
-        {
-          id: "ac-coil-servicing",
-          title: "AC Coil Servicing",
-          image: AC_Coil_Servicing,
-        },
-        {
-          id: "ac-deep-water-cleaning",
-          title: "AC Deep Water Cleaning",
-          image: AC_Deep_Water_Cleaning,
-        },
-        {
-          id: "ac-spare-parts-replacement",
-          title: "AC Spare Parts Replacement",
-          image: AC_Spare_Parts_Replacement,
-        },
-      ],
-    },
-    {
-      id: "electrical",
-      title: "Electrical Services",
-      icon: Zap,
-      subServices: [
-        { id: "wiring-repair", title: "Wiring Repair", image: Gas_Filling },
-        {
-          id: "light-installation",
-          title: "Light Installation",
-          image: AC_Repair,
-        },
-      ],
-    },
-    {
-      id: "cleaning",
-      title: "Cleaning",
-      icon: User,
-      subServices: [
-        { id: "home-cleaning", title: "Home Cleaning", image: Form_Cleaning },
-        {
-          id: "office-cleaning",
-          title: "Office Cleaning",
-          image: AC_Coil_Servicing,
-        },
-      ],
-    },
-    {
-      id: "plumbing",
-      title: "Plumbing Services",
-      icon: Droplets,
-      subServices: [
-        { id: "pipe-repair", title: "Pipe Repair", image: AC_Deep_Water_Cleaning },
-        {
-          id: "drain-cleaning",
-          title: "Drain Cleaning",
-          image: AC_Spare_Parts_Replacement,
-        },
-      ],
-    },
-    {
-      id: "cleaning-services",
-      title: "Cleaning Services",
-      icon: User,
-      subServices: [
-        { id: "deep-cleaning", title: "Deep Cleaning", image: Form_Cleaning },
-        {
-          id: "carpet-cleaning",
-          title: "Carpet Cleaning",
-          image: AC_Repair,
-        },
-      ],
-    },
-    {
-      id: "house-maintenance",
-      title: "House Maintenance",
-      icon: Building2,
-      subServices: [
-        { id: "painting", title: "Painting", image: AC_Coil_Servicing },
-        {
-          id: "roof-repair",
-          title: "Roof Repair",
-          image: AC_Spare_Parts_Replacement,
-        },
-      ],
-    },
-  ];
+  const [hasPlan, setHasPlan] = useState(false);
 
-  const [selectedCategory, setSelectedCategory] = useState(categories[0].id);
-  const currentCategory = categories.find((c) => c.id === selectedCategory);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
+  const currentCategory =
+    categories.find((c) => c.id === selectedCategory) || categories[0];
 
-// ✅ Auto-select category based on URL hash (#id)
-useEffect(() => {
-  const handleHashChange = () => {
-    const hash = window.location.hash.replace("#", "");
-    if (!hash) return;
+  // load plan flag and services from API
+  useEffect(() => {
+    const plan = localStorage.getItem("selectedPlan");
+    setHasPlan(!!plan);
 
-    const category = categories.find(
-      (cat) =>
-        cat.id === hash ||
-        cat.subServices.some((sub) => sub.id === hash)
-    );
+    const fetchServices = async () => {
+      try {
+        const res = await apiClient.get(
+          "/user/dashboard/V1/get-all-services-sub-services"
+        );
+        console.log(res, "allservicessssssssssssss");
 
-    if (category) setSelectedCategory(category.id);
+        const apiServices: ApiService[] = res.data?.data || [];
 
-    const target = document.getElementById(hash);
-    if (target) {
-      setTimeout(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "center" });
-      }, 300);
-    }
-  };
+        const mappedCategories: Category[] = apiServices.map((service, sIdx) => {
+          // make service_type check case-insensitive (API may return "enquiry" lowercase)
+          const type: "Enquiry" | "Subscription" =
+            String(service.type || "").toLowerCase() === "enquiry"
+              ? "Enquiry"
+              : "Subscription";
 
-  // Run on mount + whenever hash changes
-  handleHashChange();
-  window.addEventListener("hashchange", handleHashChange);
+          const subServices = (service.sub_services || []).map((sub, index) => ({
+            id: String(sub.id ?? `${service.id}-${index}`),
+            title: sub.title || "Sub Service",
+            slug: sub.sub_service_slug || String(sub.id ?? index),
+            // Use API image OR placeholder
+            image:
+              sub.image_url && sub.image_url.trim() !== ""
+                ? sub.image_url
+                : PlaceholderImage.src,
+          }));
 
-  return () => window.removeEventListener("hashchange", handleHashChange);
-}, [pathname]);
+          return {
+            id: service.service_slug || String(service.id ?? sIdx),
+            title: service.title || "Service",
+            // Use API icon OR placeholder
+            icon:
+              service.image_url && service.image_url.trim() !== ""
+                ? service.image_url
+                : PlaceholderImage.src,
+            type,
+            subServices,
+          };
+        });
 
+        setCategories(mappedCategories);
+        if (mappedCategories.length > 0 && !selectedCategory) {
+          setSelectedCategory(mappedCategories[0].id);
+        }
+      } catch (error) {
+        console.error("Error fetching services:", error);
+      }
+    };
+
+    fetchServices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // handle hash navigation
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace("#", "");
+      if (!hash || categories.length === 0) return;
+
+      const category = categories.find(
+        (cat) =>
+          cat.id === hash || cat.subServices.some((sub) => sub.slug === hash)
+      );
+
+      if (category) setSelectedCategory(category.id);
+
+      const target = document.getElementById(hash);
+      if (target) {
+        setTimeout(() => {
+          target.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 300);
+      }
+    };
+
+    handleHashChange();
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, [pathname, categories]);
 
   return (
     <div className="text-center bg-white p-4" id="All-Services">
@@ -177,27 +151,31 @@ useEffect(() => {
 
       <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row gap-8">
-          {/* Sidebar */}
-          <aside className="w-full md:w-1/3 lg:w-1/3/4 border p-4 rounded-lg space-y-6">
-            <Button
-              variant="outline"
-              className="w-full mb-4 flex items-center justify-center gap-2 text-primary border-primary rounded-full"
-            >
-              <Image
-                src={Emergency_Icon}
-                alt="Emergency"
-                width={18}
-                height={18}
-              />
-              Emergency Service
-              <ArrowRight className="h-4 w-4" />
-            </Button>
+          {/* SIDEBAR */}
+          <aside className="w-full md:w-1/3 border p-4 rounded-lg space-y-6">
+            {hasPlan && (
+              <Link href="/emergencyservice">
+                <Button
+                  variant="outline"
+                  className="w-full mb-4 flex items-center cursor-pointer justify-center gap-2 text-primary border-primary rounded-full"
+                >
+                  <Image
+                    src={Emergency_Icon}
+                    alt="emergency"
+                    width={18}
+                    height={18}
+                  />
+                  Emergency Service
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            )}
 
             <div className="relative mb-6">
-              <Search className="absolute text-primary left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 " />
+              <Search className="absolute text-primary left-3 top-1/2 transform -translate-y-1/2 h-4 w-4" />
               <Input
                 className="pl-10 rounded-full"
-                placeholder="Search for AC Service"
+                placeholder="Search for a Service"
               />
             </div>
 
@@ -205,16 +183,21 @@ useEffect(() => {
               {categories.map((cat) => (
                 <Card
                   key={cat.id}
-                  id={cat.id} // ✅ added id to category card
+                  id={cat.id}
                   className={`cursor-pointer ${
-                    selectedCategory === cat.id
-                      ? "border-primary text-primary"
-                      : ""
+                    selectedCategory === cat.id ? "border-primary text-primary" : ""
                   }`}
                   onClick={() => setSelectedCategory(cat.id)}
                 >
                   <CardHeader className="flex flex-col items-center p-4">
-                    <cat.icon className="h-6 w-6 mb-2" />
+                    <Image
+                      src={cat.icon}
+                      alt={cat.title}
+                      width={24}
+                      height={24}
+                      className="h-6 w-6 mb-2 object-contain"
+                      style={{ width: "24", height: "24" }}
+                    />
                     <CardTitle className="text-sm text-center">
                       {cat.title}
                     </CardTitle>
@@ -224,29 +207,46 @@ useEffect(() => {
             </div>
           </aside>
 
-          {/* Main Content */}
-          <main className="flex-1 border p-3 md:p-6 rounded-lg">
-            <h2 className="text-2xl font-bold mb-6 text-primary">
-              {currentCategory?.title}
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {currentCategory?.subServices.map((sub) => (
-                <Card key={sub.id} id={sub.id} className="overflow-hidden p-0 max-w-[300px]">
-                  <CardContent className="p-0">
-                    <Image
-                      src={sub.image}
-                      alt={sub.title}
-                      className="w-full h-35 object-cover rounded-t-lg"
-                      width={400}
-                      height={250}
-                    />
-                    <div className="p-4">
-                      <h3 className="font-semibold text-center">{sub.title}</h3>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+          {/* MAIN CONTENT */}
+          <main className="flex-1 border p-4 rounded-lg">
+            {currentCategory ? (
+              <>
+                <h2 className="text-2xl font-bold mb-6 text-primary">
+                  {currentCategory.title}
+                </h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {currentCategory.subServices.map((sub) => (
+                    <Card
+                      key={sub.id}
+                      id={sub.slug}
+                      className="overflow-hidden p-0 max-w-[300px] cursor-pointer"
+                      onClick={() =>
+                        (window.location.href = `/servicedetails/${sub.slug}?type=${currentCategory.type}`)
+                      }
+                    >
+                      <CardContent className="p-0">
+                        <Image
+                          src={sub.image}
+                          alt={sub.title}
+                          className="w-full h-35 object-cover rounded-t-lg"
+                          width={400}
+                          height={200}
+                          style={{ width: "100%", height: "200px" }}
+                        />
+                        <div className="p-4">
+                          <h3 className="font-semibold text-center">
+                            {sub.title}
+                          </h3>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p>Loading...</p>
+            )}
           </main>
         </div>
       </div>

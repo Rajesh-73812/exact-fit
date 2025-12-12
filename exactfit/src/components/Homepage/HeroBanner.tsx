@@ -6,6 +6,7 @@ import HeroImage2 from "../../../public/HeroBanner_2.png";
 import HeroImage3 from "../../../public/HeroBanner_3.png";
 import TopArrow from "../../../public/Top-arrow.svg";
 import BottomArrow from "../../../public/Bottom-arrow.svg";
+import Link from "next/link";
 
 export default function HeroBanner() {
   return (
@@ -27,9 +28,11 @@ export default function HeroBanner() {
               a call away.&quot;
             </p>
 
+            <Link href="/contactus">
             <button className="bg-primary text-white px-6 sm:px-8 py-3 sm:py-4 rounded-full font-medium text-base sm:text-lg hover:bg-primary/90 transition-colors flex items-center gap-3 cursor-pointer">
               Contact Us
             </button>
+            </Link>
           </div>
 
           {/* ✅ Right: Image Grid (1 on top, 2 below) */}

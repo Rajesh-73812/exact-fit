@@ -122,3 +122,23 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Hide the Next.js Turbopack build indicator */
+/* Hide all Next.js dev indicators, Turbopack or Webpack */
+#__next-build-indicator,
+#__next-build-watcher,
+#__next-build-indicator__dot,
+#__next-build-indicator__toast,
+#__next-build-indicator__container,
+#__next-dev-overlay,
+#__next-build-dev-overlay,
+[data-nextjs-toast],
+[data-nextjs-build-overlay],
+[data-nextjs-react-dev-overlay],
+div[id^="__next-build"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+

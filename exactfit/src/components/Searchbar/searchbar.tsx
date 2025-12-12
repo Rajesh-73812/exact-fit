@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState , useEffect} from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import Link from "next/link";
@@ -13,6 +13,7 @@ interface SearchBarProps {
 
 export default function SearchBar({ onSearch }: SearchBarProps) {
   const [query, setQuery] = useState("");
+  const [hasSubscription, setHasSubscription] = useState(false);
   const [suggestions, setSuggestions] = useState<
     { keyword: string; label: string; path: string }[]
   >([]);
@@ -60,7 +61,10 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
     router.push(`/search?query=${encodeURIComponent(query)}`);
     setSuggestions([]);
   };
-
+useEffect(() => {
+  const subPlan = localStorage.getItem("selectedPlan");
+  setHasSubscription(!!subPlan); // true if any plan exists
+}, []);
   return (
     <div className="bg-white p-3 sm:p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between w-full max-w-[90%] sm:max-w-[70%] md:max-w-[60%] lg:max-w-[50%] mx-auto mb-6 sm:mb-8 gap-3 sm:gap-0">
       {/* 🔍 Search Input + Suggestions */}
@@ -96,21 +100,24 @@ export default function SearchBar({ onSearch }: SearchBarProps) {
         </div>
       </form>
 
-      {/* 🚨 Emergency Button */}
-      <Link
-        href="/emergency"
-        className="bg-primary text-white px-4 sm:px-6 py-2 sm:py-3 rounded-full font-medium flex items-center space-x-2 hover:bg-primary transition-colors text-sm sm:text-base cursor-p"
-      >
-        <Image
-          src={EmergencyIcon}
-          alt="Emergency icon"
-          width={20}
-          height={20}
-          className="w-5 h-5 sm:w-6 sm:h-6"
-        />
-        <span>Emergency Service</span>
-        <span className="ml-1 sm:ml-2 text-white text-lg sm:text-xl">→</span>
-      </Link>
+      {/* 🚨 Emergency Button — shown only if user has subscription */}
+{hasSubscription && (
+  <Link
+    href="/emergencyservice"
+    className="bg-primary text-white px-4 sm:px-6 py-2 sm:py-3 rounded-full font-medium flex items-center space-x-2 hover:bg-primary transition-colors text-sm sm:text-base cursor-p"
+  >
+    <Image
+      src={EmergencyIcon}
+      alt="Emergency icon"
+      width={20}
+      height={20}
+      className="w-5 h-5 sm:w-6 sm:h-6"
+    />
+    <span>Emergency Service</span>
+    <span className="ml-1 sm:ml-2 text-white text-lg sm:text-xl">→</span>
+  </Link>
+)}
+
     </div>
   );
 }

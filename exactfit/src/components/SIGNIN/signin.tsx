@@ -1,15 +1,16 @@
 "use client";
+
 import { useState, useEffect, useRef } from "react";
-import PhoneInput from "react-phone-number-input/input";
+import { useRouter } from "next/navigation"; // ✅ added for navigation
 import { getCountries, getCountryCallingCode } from "react-phone-number-input";
 import "react-phone-number-input/style.css";
-// ✅ define CountryCode manually (type-safe fallback)
 import type { CountryCode } from "libphonenumber-js";
-
 
 import Image from "next/image";
 import { Timer } from "lucide-react";
 import Logo from "../../../public/Exact_Fit_login.png";
+
+import { requestOtp, verifyOtp, resendOtp } from "@/lib/apiClient";
 
 interface SignInProps {
   stage: string;
@@ -30,14 +31,21 @@ export default function SignIn({
 }: SignInProps) {
   const [timeLeft, setTimeLeft] = useState(0);
   const [selectedCountry, setSelectedCountry] = useState<CountryCode>("AE");
-  const otpRefs = useRef<HTMLInputElement[]>([]);
+  const [localNumber, setLocalNumber] = useState("");
+  // correct typing: elements can be HTMLInputElement or null
+  const otpRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const router = useRouter(); // ✅ navigation hook
+
+  const [loadingSend, setLoadingSend] = useState(false);
+  const [loadingVerify, setLoadingVerify] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
 
   const digitsOnly = phone?.replace(/\D/g, "") ?? "";
   const isValidPhone =
     phone && /^\+\d+$/.test(phone) && digitsOnly.length >= 10;
-  const isValidOtp = otp === "123456";
   const isContinueDisabled = stage === "phone" && !isValidPhone;
 
+  // ⏱ Timer countdown for OTP
   useEffect(() => {
     if (timeLeft > 0) {
       const timer = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
@@ -45,27 +53,99 @@ export default function SignIn({
     }
   }, [timeLeft]);
 
+  // ✅ Update full phone whenever country or local number changes
   useEffect(() => {
     if (!selectedCountry) return;
-
     const code = "+" + getCountryCallingCode(selectedCountry as CountryCode);
+    if (localNumber) setPhone(code + localNumber);
+    else setPhone(undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCountry, localNumber]);
 
-    if (phone && !phone.startsWith(code)) {
-   const withoutOldCode = phone.replace(/^\+\d+/, "");
-      const newPhone = code + withoutOldCode;
-      if (newPhone !== phone) setPhone(newPhone); // ✅ prevents re-loop
-  }
-}, [selectedCountry, phone]);
+  // -----------------------
+  // SEND OTP USING API CLIENT
+  // -----------------------
+  const handleSendOtp = async () => {
+    if (!phone) return;
+    setOtpError(null);
+    setLoadingSend(true);
+    try {
+      await requestOtp(phone);
+      setStage("otp");
+      setTimeLeft(30);
+      // focus first OTP input after a tick
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Failed to send OTP");
+    } finally {
+      setLoadingSend(false);
+    }
+  };
+
+  // -----------------------
+  // VERIFY OTP USING API CLIENT
+  // -----------------------
+  const handleVerifyOtp = async () => {
+    if (!phone) return;
+    if (otp.length !== 6) {
+      setOtpError("Please enter a 6-digit OTP.");
+      return;
+    }
+    setOtpError(null);
+    setLoadingVerify(true);
+    try {
+      const res = await verifyOtp(phone, otp);
+      if (res.data && res.data.success) {
+        // store token and mobile (as existing flow expected)
+        if (res.data.data?.token) {
+          localStorage.setItem("token", res.data.data.token);
+        }
+        if (res.data.data?.user?.mobile) {
+          localStorage.setItem("userPhone", res.data.data.user.mobile);
+        } else if (phone) {
+          localStorage.setItem("userPhone", phone);
+        }
+        router.push("/profilesetup");
+      } else {
+        setOtpError(res.data?.message || "OTP verification failed");
+      }
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || "OTP verification failed";
+      setOtpError(msg);
+    } finally {
+      setLoadingVerify(false);
+    }
+  };
+
+  // -----------------------
+  // RESEND OTP USING API CLIENT
+  // -----------------------
+  const handleResendOtp = async () => {
+    if (!phone) return;
+    setOtpError(null);
+    try {
+      await resendOtp(phone);
+      setTimeLeft(30);
+      // clear previous otp inputs
+      setOtp("");
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Failed to resend OTP");
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-[#303030CC] bg-opacity-75 flex items-center justify-center z-50">
       <div className="flex items-center justify-center w-full h-full px-4 sm:px-0">
         {/* Card */}
         <div className="relative bg-white mx-8 rounded-lg shadow-lg w-full max-w-md">
-          {/* Close Button — inside card */}
+          {/* Close Button */}
           {stage === "phone" && (
             <button
-              onClick={() => setStage("close")}
+              onClick={() => {
+                setStage("close");
+                router.push("/"); // ✅ go to home
+              }}
               className="absolute -top-8 right-2 bg-primary border border-red-500 rounded-full flex items-center justify-center text-white hover:bg-white hover:text-primary shadow text-lg w-6 h-6"
             >
               ×
@@ -97,7 +177,9 @@ export default function SignIn({
                 <select
                   className="border border-gray-300 rounded-md text-[14px] p-2 bg-white text-gray-700 w-18"
                   value={selectedCountry}
-                  onChange={(e) => setSelectedCountry(e.target.value as CountryCode)}
+                  onChange={(e) =>
+                    setSelectedCountry(e.target.value as CountryCode)
+                  }
                 >
                   {getCountries().map((country) => (
                     <option key={country} value={country}>
@@ -107,18 +189,25 @@ export default function SignIn({
                 </select>
 
                 <div className="relative flex-1">
-                  <PhoneInput
-                    country={selectedCountry as CountryCode}
+                  <input
+                    type="tel"
                     placeholder="Enter your phone number"
-                    value={phone}
-                    onChange={setPhone}
-                    className="w-full border border-gray-300 p-2 rounded-md text-[14px]"
-                    maxLength={9}
+                    value={localNumber}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, ""); // Only digits
+                      setLocalNumber(digits);
+                    }}
+                    className="w-full border border-gray-300 p-2 rounded-md text-[14px] pr-8"
+                    maxLength={10}
                   />
-                  {phone && (
+
+                  {localNumber && (
                     <button
                       type="button"
-                      onClick={() => setPhone(undefined)}
+                      onClick={() => {
+                        setLocalNumber("");
+                        setPhone(undefined);
+                      }}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xl"
                       aria-label="Clear phone number"
                     >
@@ -142,18 +231,15 @@ export default function SignIn({
 
               <div className="mt-6 border-t border-gray-200 shadow-[2px_-2px_6px_0px_#00000029] px-2 pt-2">
                 <button
-                  disabled={isContinueDisabled}
-                  onClick={() => {
-                    setStage("otp");
-                    setTimeLeft(30);
-                  }}
+                  disabled={isContinueDisabled || loadingSend}
+                  onClick={() => handleSendOtp()}
                   className={`w-full py-3 rounded-lg mb-2 shadow-md transition-all duration-200 ${
                     isContinueDisabled
                       ? "bg-gray-300 text-gray-500"
                       : "bg-[#E31E24] text-white hover:bg-[#c81a20]"
                   }`}
                 >
-                  Continue
+                  {loadingSend ? "Sending..." : "Continue"}
                 </button>
               </div>
             </>
@@ -174,32 +260,31 @@ export default function SignIn({
                     <input
                       key={i}
                       ref={(el) => {
-                        otpRefs.current[i] = el!;
+                        otpRefs.current[i] = el;
                       }}
                       type="text"
+                      inputMode="numeric"
                       maxLength={1}
                       value={otp[i] || ""}
                       onChange={(e) => {
+                        const val = e.currentTarget.value.replace(/\D/g, "");
                         const newOtp = otp.split("");
-                        newOtp[i] = e.currentTarget.value;
-                        setOtp(newOtp.join(""));
-                        if (e.currentTarget.value.length === 1 && i < 5) {
+                        newOtp[i] = val;
+                        const joined = newOtp.join("").slice(0, 6);
+                        setOtp(joined);
+                        if (val.length === 1 && i < 5) {
                           otpRefs.current[i + 1]?.focus();
                         }
+                        // clear any previous error when typing
+                        if (otpError) setOtpError(null);
                       }}
                       onKeyDown={(e) => {
-                        if (
-                          e.key === "Backspace" &&
-                          !e.currentTarget.value &&
-                          i > 0
-                        ) {
+                        if (e.key === "Backspace" && !e.currentTarget.value && i > 0) {
                           otpRefs.current[i - 1]?.focus();
                         }
                       }}
                       className={`w-10 h-10 text-center border-b-2 px-4 outline-none focus:border-b-2 focus:border-primary transition-colors ${
-                        otp !== "123456" && otp.length === 6
-                          ? "border-primary text-primary"
-                          : "border-gray-300"
+                        otpError ? "border-red-500 text-red-500" : "border-gray-300"
                       }`}
                     />
                   ))}
@@ -212,17 +297,15 @@ export default function SignIn({
                 </div>
               ) : (
                 <button
-                  onClick={() => setTimeLeft(30)}
+                  onClick={() => handleResendOtp()}
                   className="text-primary text-[11px] px-4"
                 >
                   Resend OTP
                 </button>
               )}
 
-              {otp.length === 6 && otp !== "123456" && (
-                <p className="text-black text-[11px] px-4 mb-2 text-left">
-                  OTP entered is incorrect. Please try again.
-                </p>
+              {otpError && (
+                <p className="text-red-600 text-[11px] px-4 mb-2 text-left">{otpError}</p>
               )}
 
               <p className="text-[11px] text-black mb-3 px-4 text-left">
@@ -239,24 +322,20 @@ export default function SignIn({
 
               <div className="mt-6 border-t border-gray-200 shadow-[2px_-2px_6px_0px_#00000029] px-2 pt-2">
                 <button
-                  disabled={otp.length !== 6 || !isValidOtp}
-                  onClick={() => {
-                    // handle login here
-                  }}
+                  disabled={otp.length !== 6 || loadingVerify}
+                  onClick={() => handleVerifyOtp()}
                   className={`w-full py-2 rounded-md mb-2 ${
-                    otp.length !== 6 || !isValidOtp
+                    otp.length !== 6 || loadingVerify
                       ? "bg-gray-300 text-gray-500"
                       : "bg-primary text-white"
                   }`}
                 >
-                  Login
+                  {loadingVerify ? "Verifying..." : "Login"}
                 </button>
               </div>
             </>
           )}
         </div>
-
-        {/* Close Button — just above the card right corner */}
       </div>
     </div>
   );

@@ -4,19 +4,21 @@ export const searchData = [
   { keyword: "home", label: "Home Page", path: "/" },
   { keyword: "about", label: "About Us", path: "/about" },
   { keyword: "contact", label: "Contact Us", path: "/contact" },
-  { keyword: "subscriptions", label: "Subscriptions Page", path: "/subscriptions" },
-  { keyword: "basic", label: "Basic Plan (Subscriptions)", path: "/subscriptions#basic" },
-  { keyword: "premium", label: "Premium Plan (Subscriptions)", path: "/subscriptions#premium" },
-  { keyword: "plans", label: "Subscription Plans", path: "/subscriptions" },
 
-  // ✅ Main Services (categories)
+  // ✅ Subscription Keywords (keep working)
+  { keyword: "allpackages", label: "allpackages Page", path: "/allpackages" },
+  { keyword: "basic plan", label: "Basic Subscription Plan", path: "/allpackages#basic" },
+  { keyword: "premium plan", label: "Premium Subscription Plan", path: "/allpackages#premium" },
+  { keyword: "plans", label: "Subscription Plans", path: "/allpackages" },
+
+  // ✅ Main Services
   { keyword: "air conditioning", label: "Air Conditioning Services", path: "/allservices#ac" },
   { keyword: "electrical", label: "Electrical Services", path: "/allservices#electrical" },
   { keyword: "cleaning", label: "Cleaning", path: "/allservices#cleaning" },
   { keyword: "plumbing", label: "Plumbing Services", path: "/allservices#plumbing" },
   { keyword: "house maintenance", label: "House Maintenance", path: "/allservices#house-maintenance" },
 
-  // ✅ Sub Services (inside AllServices)
+  // ✅ Sub Services
   { keyword: "foam cleaning", label: "Foam Cleaning", path: "/allservices#foam-cleaning" },
   { keyword: "gas filling", label: "Gas Filling", path: "/allservices#gas-filling" },
   { keyword: "ac repair", label: "AC Repair", path: "/allservices#ac-repair" },
@@ -31,4 +33,10 @@ export const searchData = [
   { keyword: "drain cleaning", label: "Drain Cleaning", path: "/allservices#drain-cleaning" },
   { keyword: "painting", label: "Painting", path: "/allservices#painting" },
   { keyword: "roof repair", label: "Roof Repair", path: "/allservices#roof-repair" },
+
+  // ✅ PACKAGES (NEW)
+  { keyword: "basic", label: "Basic Maintenance Plan", path: "/allpackages#basic" },
+  { keyword: "standard", label: "Standard Maintenance Plan", path: "/allpackages#standard" },
+  { keyword: "executive", label: "Executive Maintenance Plan", path: "/allpackages#executive" },
+  { keyword: "packages", label: "All Maintenance Packages", path: "/allpackages" },
 ];

@@ -11,26 +11,26 @@ import Footer from "./Footer";
 
 export default function Homepage() {
   return (
-    <div className="text-center bg-white ">
-      <div className="p-6">
+    <div className="text-center bg-white">
+      <div className="p-4">
         <Navbar />
       </div>
       <div>
         <SearchBar />
       </div>
-      <div className="p-4">
+      <div className="px-8">
         <HeroBanner />
       </div>
-      <div className="p-4">
+      <div className="px-8">
         <Services />
       </div>
       <div className="">
         <Packages />
       </div>
-      <div className="p-4">
+      <div className="px-8">
         <WhyChooseUs />
       </div>
-      <div className="p-4">
+      <div className="p-8">
         <AboutUs />
       </div>
       <div className="">
