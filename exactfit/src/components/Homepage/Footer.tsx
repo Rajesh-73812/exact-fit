@@ -25,11 +25,11 @@ export default function Footer() {
 
         {/* Column 1 */}
         <div className="flex flex-col gap-3 text-sm">
-          <Link href="#">About</Link>
-          <Link href="#">Services</Link>
-          <Link href="#">Bookings</Link>
-          <Link href="#">Packages</Link>
-          <Link href="#">Contact us</Link>
+          <Link href="/aboutus">About</Link>
+          <Link href="/allservices">Services</Link>
+          <Link href="/bookings">Bookings</Link>
+          <Link href="/allpackages">Packages</Link>
+          <Link href="/contactus">Contact us</Link>
         </div>
 
         {/* Column 2 */}
