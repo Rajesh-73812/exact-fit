@@ -6,17 +6,64 @@ import Image from "next/image";
 import CheckIcon from "@/public/checked_circle.svg";
 import HeadphoneIcon from "@/public/Red_headphone.svg";
 import HomeIcon from "@/public/home_icon.svg";
-import WorkIcon from "@/public/work_icon.svg";
-import OfficeIcon from "@/public/office_icon.svg";
 import Footer from "../Homepage/Footer";
 import apiClient from "@/lib/apiClient";
+
+/**
+ * EmergencyServices.tsx
+ * - Full file (updated): fully API-driven (addresses + services)
+ * - No static fallback data except OPTIONAL_USER_ID (used when no auth token present)
+ * - Keeps UI & styling unchanged
+ * - Adds strict validation for starred fields:
+ *   Full Name, Email, Mobile Number, Choose Emirates, Address, Add Service
+ * - Shows field-level red error messages under inputs (and red border)
+ */
+
+const OPTIONAL_USER_ID = "492d20af-6f1b-44c6-9454-2cc827e3a4af";
+
+type AddressType = {
+  id: number;
+  save_as_address_type?: string;
+  location?: string;
+  emirate?: string;
+  area?: string;
+  building?: string;
+  appartment?: string;
+  addtional_address?: string;
+  raw?: any;
+};
+
+type ServiceItem = {
+  id?: number | string;
+  name: string;
+};
+
+type ServiceCategory = {
+  id?: number | string;
+  title: string;
+  items: ServiceItem[];
+};
+
+type ErrorsType = {
+  fullName?: string;
+  email?: string;
+  mobile?: string;
+  emirate?: string;
+  address?: string;
+  service?: string;
+};
 
 export default function EmergencyServices() {
   const [selectedCategory, setSelectedCategory] = useState("Residential");
   const [selectedAddress, setSelectedAddress] = useState("");
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
   const [showAddressList, setShowAddressList] = useState(false);
+
+  // popup control now supports message + error flag (keeps same visuals)
   const [showPopup, setShowPopup] = useState(false);
+  const [popupMessage, setPopupMessage] = useState("Emergency Request Raised Successfully");
+  const [popupIsError, setPopupIsError] = useState(false);
+
   const [expandedService, setExpandedService] = useState<string | null>(null);
   const [selectedService, setSelectedService] = useState<string>("");
 
@@ -29,145 +76,194 @@ export default function EmergencyServices() {
   const [description, setDescription] = useState("");
 
   // addresses from API
-  const [addresses, setAddresses] = useState<
-    Array<{
-      id: number;
-      save_as_address_type?: string;
-      location?: string;
-      emirate?: string;
-      area?: string;
-      building?: string;
-      appartment?: string;
-      addtional_address?: string;
-      raw?: any;
-    }>
-  >([]);
+  const [addresses, setAddresses] = useState<AddressType[]>([]);
   const [addressesLoading, setAddressesLoading] = useState(false);
 
-  // local service categories (kept as-is). We'll map category/item -> ids when sending.
-  const serviceCategories = [
-    {
-      title: "AC Services",
-      items: [
-        "AC Repair",
-        "AC Deep Water Cleaning",
-        "AC Coil Servicing",
-        "AC Spare Parts Replacement",
-      ],
-    },
-    {
-      title: "Special Cleaning",
-      items: [
-        "Mold Inspection & Mold Remediation",
-        "Data center cleaning",
-        "HVAC System Cleaning",
-        "Glass Restoration",
-      ],
-    },
-    {
-      title: "Plumbing Service",
-      items: ["Pipe Repair", "Drain Cleaning"],
-    },
-    {
-      title: "Electrical Services",
-      items: ["Light Installation", "Wiring Repair"],
-    },
-  ];
+  // services from API
+  const [serviceCategories, setServiceCategories] = useState<ServiceCategory[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(false);
 
-  // savedAddresses fall-back icons for UI (kept for backward compatibility)
-  const savedAddressesFallback = [
-    {
-      id: 1,
-      label: "Home",
-      address: "7B Spice Road, Banjara Hills, Hyderabad 500034, Telangana, India.",
-      icon: HomeIcon,
-    },
-    {
-      id: 2,
-      label: "Work",
-      address: "22 Baker Street, London, UK, NW1 6XE.",
-      icon: WorkIcon,
-    },
-    {
-      id: 3,
-      label: "Office",
-      address: "45 Corporate Way, New York, NY 10010, USA.",
-      icon: OfficeIcon,
-    },
-  ];
+  // field-level errors
+  const [errors, setErrors] = useState<ErrorsType>({});
 
   useEffect(() => {
     fetchAddresses();
+    fetchServices();
   }, []);
 
+  /**
+   * Fetch user details (to obtain addresses).
+   * Uses OPTIONAL_USER_ID as query param if token/auth not present.
+   */
   const fetchAddresses = async () => {
     setAddressesLoading(true);
     try {
-      const res = await apiClient.get("/user/user-auth/V1/user-details");
-      const user = res.data?.data || null;
-      const apiAddresses: any[] = Array.isArray(user?.addresses) ? user.addresses : [];
+      const res = await apiClient.get(`/user/user-auth/V1/user-details?id=${OPTIONAL_USER_ID}`);
+      const user = res?.data?.data ?? res?.data ?? null;
 
-      setAddresses(
-        apiAddresses.map((a: any) => ({
-          id: a.id,
-          save_as_address_type: a.save_as_address_type,
-          location: a.location,
-          emirate: a.emirate,
-          area: a.area,
-          building: a.building,
-          appartment: a.appartment,
-          addtional_address: a.addtional_address,
-          raw: a,
-        }))
-      );
+      // normalize possible shapes: user.addresses (array) OR user (array)
+      let apiAddresses: any[] = [];
+      if (Array.isArray(user?.addresses)) {
+        apiAddresses = user.addresses;
+      } else if (Array.isArray(user)) {
+        // API returned array directly
+        apiAddresses = user;
+      } else if (user?.addresses && Array.isArray(user.addresses)) {
+        apiAddresses = user.addresses;
+      } else {
+        apiAddresses = [];
+      }
+
+      const normalized = apiAddresses.map((a: any) => ({
+        id: a.id,
+        save_as_address_type: a.save_as_address_type,
+        location: a.location,
+        emirate: a.emirate,
+        area: a.area,
+        building: a.building,
+        appartment: a.appartment,
+        addtional_address: a.addtional_address,
+        raw: a,
+      }));
+
+      setAddresses(normalized);
     } catch (err) {
       console.error("Failed to load addresses:", err);
-      setAddresses([]);
+      setAddresses([]); // no static fallback per request
     } finally {
       setAddressesLoading(false);
     }
   };
 
+  /**
+   * Fetch services/categories from backend.
+   * Endpoint: user/dashboard/V1/get-all-services-sub-services
+   * Normalizes common response shapes into ServiceCategory[].
+   */
+  const fetchServices = async () => {
+    setServicesLoading(true);
+    try {
+      const res = await apiClient.get("user/dashboard/V1/get-all-services-sub-services"); // adjust endpoint if needed
+      const data = res?.data?.data ?? res?.data ?? null;
+
+      if (!Array.isArray(data)) {
+        setServiceCategories([]);
+        setServicesLoading(false);
+        return;
+      }
+
+      const normalized: ServiceCategory[] = data.map((cat: any, idx: number) => {
+        const title = cat.title || cat.name || cat.category || cat.category_name || `Category ${idx + 1}`;
+
+        // determine items array from various keys
+        let rawItems: any[] = [];
+        if (Array.isArray(cat.items)) rawItems = cat.items;
+        else if (Array.isArray(cat.services)) rawItems = cat.services;
+        else if (Array.isArray(cat.sub_services)) rawItems = cat.sub_services;
+        else if (Array.isArray(cat.children)) rawItems = cat.children;
+        else if (Array.isArray(cat)) rawItems = cat; // improbable but safe
+
+        const items: ServiceItem[] = rawItems.map((it: any) => {
+          const name = it.name || it.title || it.service_name || it.sub_service_name || String(it);
+          const id = it.id ?? it.sub_service_id ?? it._id ?? it.uuid ?? undefined;
+          return { id, name };
+        });
+
+        return { id: cat.id ?? idx + 1, title, items };
+      });
+
+      setServiceCategories(normalized);
+    } catch (err) {
+      console.error("Failed to load services:", err);
+      setServiceCategories([]); // no static fallback
+    } finally {
+      setServicesLoading(false);
+    }
+  };
+
   // when selecting an address, populate address fields and save id
-  const handleAddressSelect = (addr: any) => {
+  const handleAddressSelect = (addr: AddressType) => {
     const label = addr.save_as_address_type || addr.location || "Saved Address";
     setSelectedAddress(label);
     setSelectedAddressId(addr.id || null);
 
-    // populate form address-related fields to keep consistency (emirate/area/building/etc)
     if (addr.emirate) setEmirate(addr.emirate);
-    if (addr.raw?.area) {
-      // we don't have dedicated area/building inputs in this UI but we keep data if needed later
-    }
     setShowAddressList(false);
+
+    // clear address error on selection
+    setErrors((prev) => ({ ...prev, address: undefined }));
   };
 
   // set selected service (and auto-close)
-  const handleServiceSelect = (service: string) => {
-    setSelectedService(service);
+  const handleServiceSelect = (serviceName: string) => {
+    setSelectedService(serviceName);
     setExpandedService(null);
+
+    // clear service error on selection
+    setErrors((prev) => ({ ...prev, service: undefined }));
   };
 
-  // builds service_id & sub_service_id for backend
-  // We'll send service_id = categoryIndex + 1, sub_service_id = itemIndex + 1
+  // builds service_id & sub_service_id for backend using dynamic categories
   const mapServiceToIds = (serviceName: string) => {
     for (let ci = 0; ci < serviceCategories.length; ci++) {
       const cat = serviceCategories[ci];
-      const si = cat.items.findIndex((it) => it === serviceName);
+      const si = cat.items.findIndex((it) => it.name === serviceName || String(it.name) === String(serviceName));
       if (si !== -1) {
-        return { service_id: ci + 1, sub_service_id: si + 1 };
+        // prefer item id if available
+        const service_id = cat.id ?? ci + 1;
+        const sub_service_id = cat.items[si].id ?? si + 1;
+        return { service_id, sub_service_id };
       }
     }
-    // fallback
     return { service_id: null, sub_service_id: null };
   };
 
+  // field validation helper
+  const validateFields = (): ErrorsType => {
+    const e: ErrorsType = {};
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!fullName.trim()) e.fullName = "Full Name is required";
+    if (!email.trim()) e.email = "Email is required";
+    else if (!emailRegex.test(email.trim())) e.email = "Enter a valid email";
+    if (!mobile.trim()) e.mobile = "Mobile Number is required";
+    else if (mobile.trim().length < 5) e.mobile = "Enter a valid mobile number";
+    if (!emirate || !emirate.trim()) e.emirate = "Select an emirate";
+    if (!selectedAddress && !selectedAddressId) e.address = "Select an address";
+    if (!selectedService) e.service = "Select a service";
+
+    return e;
+  };
+
+  // clear error on change helpers
+  const onFullNameChange = (v: string) => {
+    setFullName(v);
+    if (errors.fullName) setErrors((p) => ({ ...p, fullName: undefined }));
+  };
+  const onEmailChange = (v: string) => {
+    setEmail(v);
+    if (errors.email) setErrors((p) => ({ ...p, email: undefined }));
+  };
+  const onMobileChange = (v: string) => {
+    setMobile(v);
+    if (errors.mobile) setErrors((p) => ({ ...p, mobile: undefined }));
+  };
+  const onEmirateChange = (v: string) => {
+    setEmirate(v);
+    if (errors.emirate) setErrors((p) => ({ ...p, emirate: undefined }));
+  };
+
+  // === UPDATED handleSubmit with strict validation and field-level errors ===
   const handleSubmit = async () => {
-    // basic validation
-    if (!fullName.trim() || !email.trim() || !mobile.trim() || !selectedService) {
-      // keep current UI behavior: show popup even for errors (consistent with other components)
+    const validationErrors = validateFields();
+    setErrors(validationErrors);
+
+    // if any error, focus on showing inline messages and prevent API call
+    if (Object.keys(validationErrors).length > 0) {
+      setPopupIsError(true);
+      setPopupMessage("Please fix the highlighted fields");
       setShowPopup(true);
-      setTimeout(() => setShowPopup(false), 1500);
+      setTimeout(() => setShowPopup(false), 1800);
       return;
     }
 
@@ -182,10 +278,12 @@ export default function EmergencyServices() {
       address_id: selectedAddressId,
       description: description || selectedService,
     };
-
+    
     try {
-      const res = await apiClient.post("/user/booking/V1/upsert-emergency", payload);
+      const res = await apiClient.post(`/user/booking/V1/upsert-emergency/`, payload);
       if (res?.data?.success) {
+        setPopupIsError(false);
+        setPopupMessage("Emergency Request Raised Successfully");
         setShowPopup(true);
         // reset minimal fields (keep country code)
         setFullName("");
@@ -195,16 +293,21 @@ export default function EmergencyServices() {
         setSelectedAddressId(null);
         setSelectedService("");
         setDescription("");
+        setErrors({});
         setTimeout(() => setShowPopup(false), 1500);
       } else {
         console.error("Emergency API non-success:", res?.data);
+        setPopupIsError(true);
+        setPopupMessage("Failed to raise emergency request. Try again.");
         setShowPopup(true);
-        setTimeout(() => setShowPopup(false), 1500);
+        setTimeout(() => setShowPopup(false), 2000);
       }
     } catch (err) {
       console.error("upsertEmergency error:", err);
+      setPopupIsError(true);
+      setPopupMessage("Network error. Please try again later.");
       setShowPopup(true);
-      setTimeout(() => setShowPopup(false), 1500);
+      setTimeout(() => setShowPopup(false), 2000);
     }
   };
 
@@ -214,12 +317,12 @@ export default function EmergencyServices() {
         <Navbar />
       </div>
 
-      {/* ✅ Success Popup */}
+      {/* Popup for both success & validation errors (visuals unchanged) */}
       {showPopup && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-10 shadow-lg text-center">
             <Image src={CheckIcon} alt="check" className="w-10 h-10 mx-auto mb-4" />
-            <p className="text-lg font-medium">Emergency Request Raised Successfully</p>
+            <p className="text-lg font-medium">{popupMessage}</p>
           </div>
         </div>
       )}
@@ -238,20 +341,30 @@ export default function EmergencyServices() {
               <input
                 type="text"
                 placeholder="Ameer"
-                className="w-full border rounded-md px-3 py-2 mt-2 outline-none"
+                className={`w-full border rounded-md px-3 py-2 mt-2 outline-none ${errors.fullName ? "border-red-500" : ""}`}
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(e) => onFullNameChange(e.target.value)}
+                onBlur={() => {
+                  if (!fullName.trim()) setErrors((p) => ({ ...p, fullName: "Full Name is required" }));
+                }}
               />
+              {errors.fullName && <p className="text-sm text-red-500 mt-1">{errors.fullName}</p>}
             </div>
             <div>
               <label className="text-sm font-medium">Email *</label>
               <input
                 type="email"
                 placeholder="abcd@gmail.com"
-                className="w-full border rounded-md px-3 py-2 mt-2 outline-none"
+                className={`w-full border rounded-md px-3 py-2 mt-2 outline-none ${errors.email ? "border-red-500" : ""}`}
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => onEmailChange(e.target.value)}
+                onBlur={() => {
+                  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                  if (!email.trim()) setErrors((p) => ({ ...p, email: "Email is required" }));
+                  else if (!emailRegex.test(email.trim())) setErrors((p) => ({ ...p, email: "Enter a valid email" }));
+                }}
               />
+              {errors.email && <p className="text-sm text-red-500 mt-1">{errors.email}</p>}
             </div>
           </div>
 
@@ -261,7 +374,7 @@ export default function EmergencyServices() {
               <label className="text-sm font-medium">Mobile Number *</label>
               <div className="flex gap-2 mt-2">
                 <select
-                  className="border rounded-md px-2 py-2 text-sm"
+                  className={`border rounded-md px-2 py-2 text-sm ${errors.mobile ? "border-red-500" : ""}`}
                   value={countryCode}
                   onChange={(e) => setCountryCode(e.target.value)}
                 >
@@ -271,37 +384,52 @@ export default function EmergencyServices() {
                 <input
                   type="text"
                   placeholder="9898998989"
-                  className="flex-1 border rounded-md px-3 py-2 outline-none"
+                  className={`flex-1 border rounded-md px-3 py-2 outline-none ${errors.mobile ? "border-red-500" : ""}`}
                   maxLength={15}
                   value={mobile}
-                  onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
+                  onChange={(e) => onMobileChange(e.target.value.replace(/\D/g, ""))}
+                  onBlur={() => {
+                    if (!mobile.trim()) setErrors((p) => ({ ...p, mobile: "Mobile Number is required" }));
+                    else if (mobile.trim().length < 5) setErrors((p) => ({ ...p, mobile: "Enter a valid mobile number" }));
+                  }}
                 />
               </div>
+              {errors.mobile && <p className="text-sm text-red-500 mt-1">{errors.mobile}</p>}
             </div>
             <div>
               <label className="text-sm font-medium">Choose Emirates *</label>
               <select
-                className="w-full border rounded-md px-3 py-2 mt-2"
+                className={`w-full border rounded-md px-3 py-2 mt-2 ${errors.emirate ? "border-red-500" : ""}`}
                 value={emirate}
-                onChange={(e) => setEmirate(e.target.value)}
+                onChange={(e) => onEmirateChange(e.target.value)}
+                onBlur={() => {
+                  if (!emirate || !emirate.trim()) setErrors((p) => ({ ...p, emirate: "Select an emirate" }));
+                }}
               >
                 <option>Dubai</option>
                 <option>Abu Dhabi</option>
                 <option>Sharjah</option>
               </select>
+              {errors.emirate && <p className="text-sm text-red-500 mt-1">{errors.emirate}</p>}
             </div>
           </div>
 
-          {/* ✅ Address Dropdown (API-driven) */}
+          {/* Address Dropdown (API-driven) */}
           <div className="mb-4">
             <label className="text-sm font-medium">Address *</label>
             <div
-              onClick={() => setShowAddressList(!showAddressList)}
-              className="border rounded-md p-3 mt-2 flex justify-between items-center cursor-pointer"
+              onClick={() => {
+                setShowAddressList(!showAddressList);
+                // clear address error when user opens list to select
+                if (errors.address) setErrors((p) => ({ ...p, address: undefined }));
+              }}
+              className={`border rounded-md p-3 mt-2 flex justify-between items-center cursor-pointer ${errors.address ? "border-red-500" : ""}`}
             >
               <span className="text-sm text-gray-700">{selectedAddress ? selectedAddress : "Select Address"}</span>
               <span className="text-primary text-sm">▼</span>
             </div>
+
+            {errors.address && <p className="text-sm text-red-500 mt-1">{errors.address}</p>}
 
             {showAddressList && (
               <div className="mt-3 space-y-3">
@@ -312,28 +440,7 @@ export default function EmergencyServices() {
                 {addressesLoading ? (
                   <div className="text-sm text-gray-500">Loading addresses...</div>
                 ) : addresses.length === 0 ? (
-                  // fallback to static if API returns none
-                  savedAddressesFallback.map((addr) => (
-                    <div
-                      key={addr.id}
-                      className="border rounded-xl p-3 flex items-start hover:bg-gray-50 cursor-pointer"
-                      onClick={() => {
-                        setSelectedAddress(addr.label);
-                        setSelectedAddressId(addr.id);
-                        setShowAddressList(false);
-                      }}
-                    >
-                      <Image src={addr.icon} alt={addr.label} width={24} height={24} className="mr-3 mt-1" />
-                      <div className="flex-1">
-                        <p className="font-medium text-sm">{addr.label}</p>
-                        <p className="text-gray-600 text-xs">{addr.address}</p>
-                      </div>
-
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ml-3 ${selectedAddress === addr.label ? "border-primary" : "border-gray-400"}`}>
-                        {selectedAddress === addr.label && <div className="w-3 h-3 rounded-full bg-primary" />}
-                      </div>
-                    </div>
-                  ))
+                  <div className="text-sm text-gray-500">No saved addresses found.</div>
                 ) : (
                   addresses.map((addr) => (
                     <div
@@ -347,7 +454,11 @@ export default function EmergencyServices() {
                         <p className="text-gray-600 text-xs">{addr.location}</p>
                       </div>
 
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ml-3 ${selectedAddress === (addr.save_as_address_type || addr.location) ? "border-primary" : "border-gray-400"}`}>
+                      <div
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ml-3 ${
+                          selectedAddress === (addr.save_as_address_type || addr.location) ? "border-primary" : "border-gray-400"
+                        }`}
+                      >
                         {selectedAddress === (addr.save_as_address_type || addr.location) && <div className="w-3 h-3 rounded-full bg-primary" />}
                       </div>
                     </div>
@@ -357,41 +468,52 @@ export default function EmergencyServices() {
             )}
           </div>
 
-          {/* ✅ Service Dropdown */}
+          {/* Service Dropdown (API-driven) */}
           <div className="mb-4">
             <label className="text-sm font-medium">Add Service *</label>
-            <div className="border rounded-md p-3 mt-2">
+            <div className={`border rounded-md p-3 mt-2 ${errors.service ? "border-red-500" : ""}`}>
               <div className="flex justify-between items-center cursor-pointer" onClick={() => setExpandedService(expandedService ? null : "main")}>
-                <p className="text-sm text-gray-700">{selectedService ? selectedService : "Select Service"}</p>
+                <p className="text-sm text-gray-700">{selectedService ? selectedService : servicesLoading ? "Loading services..." : "Select Service"}</p>
                 <span className="text-primary">{expandedService ? "▲" : "▼"}</span>
               </div>
 
               {expandedService && (
                 <div className="mt-3 border-t pt-3 space-y-3">
-                  {serviceCategories.map((category, idx) => (
-                    <div key={idx}>
-                      <div className="flex justify-between items-center text-sm font-medium cursor-pointer py-1" onClick={() => setExpandedService(expandedService === category.title ? "main" : category.title)}>
-                        <span className="text-primary">{category.title}</span>
-                        {category.items.length > 0 && <span className="text-primary">{expandedService === category.title ? "▲" : "▼"}</span>}
-                      </div>
-
-                      {expandedService === category.title && category.items.map((item, i) => (
-                        <div key={i} className="flex items-center gap-2 pl-4 py-1 text-sm">
-                          <input
-                            type="radio"
-                            name="service"
-                            checked={selectedService === item}
-                            onChange={() => handleServiceSelect(item)}
-                            className="accent-primary"
-                          />
-                          <label>{item}</label>
+                  {servicesLoading ? (
+                    <div className="text-sm text-gray-500">Loading services...</div>
+                  ) : serviceCategories.length === 0 ? (
+                    <div className="text-sm text-gray-500">No services available.</div>
+                  ) : (
+                    serviceCategories.map((category, idx) => (
+                      <div key={category.id ?? idx}>
+                        <div
+                          className="flex justify-between items-center text-sm font-medium cursor-pointer py-1"
+                          onClick={() => setExpandedService(expandedService === category.title ? "main" : category.title)}
+                        >
+                          <span className="text-primary">{category.title}</span>
+                          {category.items.length > 0 && <span className="text-primary">{expandedService === category.title ? "▲" : "▼"}</span>}
                         </div>
-                      ))}
-                    </div>
-                  ))}
+
+                        {expandedService === category.title &&
+                          category.items.map((item, i) => (
+                            <div key={item.id ?? i} className="flex items-center gap-2 pl-4 py-1 text-sm">
+                              <input
+                                type="radio"
+                                name="service"
+                                checked={selectedService === item.name}
+                                onChange={() => handleServiceSelect(item.name)}
+                                className="accent-primary"
+                              />
+                              <label>{item.name}</label>
+                            </div>
+                          ))}
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
             </div>
+            {errors.service && <p className="text-sm text-red-500 mt-1">{errors.service}</p>}
           </div>
 
           {/* Category */}

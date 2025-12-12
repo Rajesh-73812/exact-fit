@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import Navbar from "../Navbar/Navbar";
 import Footer from "../Homepage/Footer";
@@ -8,14 +8,24 @@ import HomeIcon from "@/public/home_icon.svg";
 import WorkIcon from "@/public/work_icon.svg";
 import OfficeIcon from "@/public/office_icon.svg";
 import { useRouter } from "next/navigation";
+import apiClient from "@/lib/apiClient";
 
 /**
  * Full updated CustomPackages.tsx
- * - Accordion (only one open at a time)
- * - Categories → sub-services with checkboxes
- * - Right summary: "No service Added" card when none selected
- * - Qty controls + remove
- * - Static data (Option 2 structure)
+ * - Keeps layout & styles unchanged
+ * - Replaces static addresses and categories with API-driven data
+ * - Uses OPTIONAL_USER_ID fallback when no token available
+ *
+ * Notes:
+ * - Addresses endpoint used: /user/user-auth/V1/user-details?id=<userId>
+ *   expected shape: { data: { addresses: [ { id, save_as_address_type, location, ... } ] } }
+ *
+ * - Services endpoint used: user/dashboard/V1/get-all-services-sub-services?id=<userId>
+ *   expected to return an array of categories each with sub-services.
+ *   Normalized into the same shape used by the UI:
+ *     { id, title, subServices: [{ id, name, price, image }] }
+ *
+ * - Keep UI & style exactly as in the provided file.
  */
 
 type SelectedService = {
@@ -25,6 +35,37 @@ type SelectedService = {
   qty: number;
   image?: string;
 };
+
+type AddressApi = {
+  id: number | string;
+  save_as_address_type?: string;
+  location?: string;
+  emirate?: string;
+  area?: string;
+  building?: string;
+  appartment?: string;
+  addtional_address?: string;
+  raw?: any;
+};
+
+type ApiSubService = {
+  id?: string | number;
+  name?: string;
+  price?: number;
+  image?: string;
+};
+
+type ApiCategory = {
+  id?: string | number;
+  title?: string;
+  // various API shapes: items/services/sub_services/children
+  items?: any[];
+  services?: any[];
+  sub_services?: any[];
+  children?: any[];
+};
+
+const OPTIONAL_USER_ID = "492d20af-6f1b-44c6-9454-2cc827e3a4af";
 
 export default function CustomPackages() {
   const router = useRouter();
@@ -54,87 +95,18 @@ export default function CustomPackages() {
   const [openCategory, setOpenCategory] = useState<string | null>(null);
   const [openMain, setOpenMain] = useState(false);
 
-  // Static category -> sub services (Option 2)
-  const categories = [
-    {
-      id: "ac-services",
-      title: "AC Services",
-      subServices: [
-        {
-          id: "mold-inspection",
-          name: "Mold Inspection",
-          price: 160,
-          image: "/placeholder-mold.jpg",
-        },
-        {
-          id: "data-center-cleaning",
-          name: "Data Center Cleaning",
-          price: 300,
-          image: "/placeholder-data.jpg",
-        },
-        {
-          id: "hvac-system-cleaning",
-          name: "HVAC System Cleaning",
-          price: 220,
-          image: "/placeholder-hvac.jpg",
-        },
-      ],
-    },
-    {
-      id: "special-cleaning",
-      title: "Special Cleaning",
-      subServices: [
-        {
-          id: "deep-cleaning",
-          name: "Deep Cleaning",
-          price: 200,
-          image: "/placeholder-clean.jpg",
-        },
-        {
-          id: "carpet-cleaning",
-          name: "Carpet Cleaning",
-          price: 120,
-          image: "/placeholder-carpet.jpg",
-        },
-      ],
-    },
-    {
-      id: "electrical-services",
-      title: "Electrical Services",
-      subServices: [
-        {
-          id: "wiring-repair",
-          name: "Wiring Repair",
-          price: 180,
-          image: "/placeholder-electrical.jpg",
-        },
-        {
-          id: "light-installation",
-          name: "Light Installation",
-          price: 90,
-          image: "/placeholder-light.jpg",
-        },
-      ],
-    },
-    {
-      id: "plumbing-services",
-      title: "Plumbing Services",
-      subServices: [
-        {
-          id: "pipe-repair",
-          name: "Pipe Repair",
-          price: 150,
-          image: "/placeholder-plumbing.jpg",
-        },
-        {
-          id: "drain-cleaning",
-          name: "Drain Cleaning",
-          price: 110,
-          image: "/placeholder-drain.jpg",
-        },
-      ],
-    },
-  ];
+  // API-driven categories (replaces static categories)
+  const [categories, setCategories] = useState<
+    { id: string; title: string; subServices: ApiSubService[] }[]
+  >([]);
+
+  // API-driven saved addresses (replaces static savedAddresses)
+  const [savedAddresses, setSavedAddresses] = useState<
+    { id: string | number; label: string; address: string; icon: any }[]
+  >([]);
+
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [servicesLoading, setServicesLoading] = useState(false);
 
   const emirates = [
     "Dubai",
@@ -146,28 +118,174 @@ export default function CustomPackages() {
     "Fujairah",
   ];
 
-  const savedAddresses = [
-    {
-      id: 1,
-      label: "Home",
-      address:
-        "78 Spice Road, Banjara Hills, Hyderabad 500034, Telangana, India.",
-      icon: HomeIcon,
-    },
-    {
-      id: 2,
-      label: "Work",
-      address: "22 Baker Street, London, UK.",
-      icon: WorkIcon,
-    },
-    {
-      id: 3,
-      label: "Office",
-      address: "45 Corporate Way, New York, NY 10010, USA.",
-      icon: OfficeIcon,
-    },
-  ];
+  // -------------------------
+  // Helper: read user id from JWT stored in localStorage
+  // fallback to OPTIONAL_USER_ID when token not present or decode fails
+  // -------------------------
+  const getUserIdFromLocalToken = () => {
+    try {
+      if (typeof window === "undefined") return OPTIONAL_USER_ID;
+      const token =
+        localStorage.getItem("token") ||
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("authToken");
+      if (!token) return OPTIONAL_USER_ID;
+      const parts = token.split(".");
+      if (parts.length < 2) return OPTIONAL_USER_ID;
+      const payload = parts[1];
+      const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+      const decoded = decodeURIComponent(
+        atob(b64)
+          .split("")
+          .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+          .join("")
+      );
+      const obj = JSON.parse(decoded);
+      return obj?.id || obj?.user_id || obj?.sub || OPTIONAL_USER_ID;
+    } catch (e) {
+      return OPTIONAL_USER_ID;
+    }
+  };
 
+  // -------------------------
+  // Fetch addresses & services on mount
+  // -------------------------
+  useEffect(() => {
+    fetchAddresses();
+    fetchServices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const fetchAddresses = async () => {
+    setAddressesLoading(true);
+    try {
+      const userId = getUserIdFromLocalToken();
+      const res = await apiClient.get(
+        `/user/user-auth/V1/user-details?id=${userId}`
+      );
+      const user = res?.data?.data ?? res?.data ?? null;
+
+      let apiAddresses: any[] = [];
+      if (Array.isArray(user?.addresses)) apiAddresses = user.addresses;
+      else if (Array.isArray(user)) apiAddresses = user;
+      else if (user?.addresses && Array.isArray(user.addresses))
+        apiAddresses = user.addresses;
+      else apiAddresses = [];
+
+      // Map to savedAddresses structure expected by UI.
+      // Use icons: Home, Work, Office for first 3 entries if label matches, else HomeIcon
+      const mapped = apiAddresses.map((a: any, idx: number) => {
+        const label =
+          a.save_as_address_type || a.location || `Address ${idx + 1}`;
+        const address = a.location || a.addtional_address || "";
+        // pick icon heuristically
+        let icon = HomeIcon;
+        const lowLabel = String(label).toLowerCase();
+        if (lowLabel.includes("work")) icon = WorkIcon;
+        else if (lowLabel.includes("office")) icon = OfficeIcon;
+        return {
+          id: a.id ?? idx,
+          label,
+          address,
+          icon,
+        };
+      });
+
+      setSavedAddresses(mapped);
+    } catch (err) {
+      console.error("Failed to load addresses:", err);
+      setSavedAddresses([]); // no static fallback per your request
+    } finally {
+      setAddressesLoading(false);
+    }
+  };
+
+  const fetchServices = async () => {
+    setServicesLoading(true);
+    try {
+      const userId = getUserIdFromLocalToken();
+      const res = await apiClient.get(
+        `user/dashboard/V1/get-all-services-sub-services?id=${userId}`
+      );
+      console.log(res, "responseeeeeeeeeeeeeeee");
+      const data: any = res?.data?.data ?? res?.data ?? null;
+
+      if (!Array.isArray(data)) {
+        setCategories([]); // keep empty if unexpected shape
+        setServicesLoading(false);
+        return;
+      }
+
+      // Normalize various possible shapes into { id, title, subServices[] }
+      const normalized = data.map((cat: ApiCategory, idx: number) => {
+        const title =
+          (cat as any).title ||
+          (cat as any).name ||
+          (cat as any).category ||
+          (cat as any).category_name ||
+          `Category ${idx + 1}`;
+
+        // find subservice array in known keys
+        let rawItems: any[] = [];
+        if (Array.isArray((cat as any).items)) rawItems = (cat as any).items;
+        else if (Array.isArray((cat as any).services))
+          rawItems = (cat as any).services;
+        else if (Array.isArray((cat as any).sub_services))
+          rawItems = (cat as any).sub_services;
+        else if (Array.isArray((cat as any).children))
+          rawItems = (cat as any).children;
+        else rawItems = [];
+
+        const subServices: ApiSubService[] = rawItems.map(
+          (it: any, sidx: number) => {
+            const name =
+              it.name ||
+              it.title ||
+              it.sub_service_name ||
+              it.service_name ||
+              String(it);
+            const id =
+              it.id ??
+              it.sub_service_id ??
+              it._id ??
+              it.uuid ??
+              `s-${idx}-${sidx}`;
+            // price may be present under various keys; fallback to 0
+            // add this helper above the mapping (inside fetchServices or top of file):
+            const parseNumberOrNull = (v: any): number | null => {
+              if (v === null || v === undefined || v === "") return null;
+              // remove commas, trim, then parse
+              const n = parseFloat(String(v).replace(/,/g, "").trim());
+              return Number.isFinite(n) ? n : null;
+            };
+
+            // replacement for price calculation:
+            const price =
+              parseNumberOrNull(it.price) ??
+              parseNumberOrNull(it.amount) ??
+              parseNumberOrNull(it.cost) ??
+              0;
+
+            const image = it.image || it.icon || it.picture || undefined;
+            return { id, name, price, image };
+          }
+        );
+
+        return { id: (cat as any).id ?? `c-${idx}`, title, subServices };
+      });
+
+      setCategories(normalized);
+    } catch (err) {
+      console.error("Failed to load services:", err);
+      setCategories([]); // no static fallback
+    } finally {
+      setServicesLoading(false);
+    }
+  };
+
+  // -------------------------
+  // Form handlers (unchanged UI)
+  // -------------------------
   const handleInputChange = (field: keyof typeof formData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -180,7 +298,7 @@ export default function CustomPackages() {
   // toggle subservice checkbox
   const handleToggleSubService = (
     categoryId: string,
-    subId: string,
+    subId: string | number,
     name: string,
     price: number,
     image?: string
@@ -198,22 +316,19 @@ export default function CustomPackages() {
   };
 
   const updateQty = (id: string, delta: number) => {
-  setSelectedServices((prev) => {
-    const item = prev.find((s) => s.id === id);
-    if (!item) return prev;
+    setSelectedServices((prev) => {
+      const item = prev.find((s) => s.id === id);
+      if (!item) return prev;
 
-    // if qty becomes 1 and user presses minus → remove it
-    if (item.qty === 1 && delta === -1) {
-      return prev.filter((s) => s.id !== id);
-    }
+      // if qty becomes 1 and user presses minus → remove it
+      if (item.qty === 1 && delta === -1) {
+        return prev.filter((s) => s.id !== id);
+      }
 
-    // normal qty update
-    return prev.map((s) =>
-      s.id === id ? { ...s, qty: s.qty + delta } : s
-    );
-  });
-};
-
+      // normal qty update
+      return prev.map((s) => (s.id === id ? { ...s, qty: s.qty + delta } : s));
+    });
+  };
 
   const removeService = (id: string) => {
     setSelectedServices((prev) => prev.filter((s) => s.id !== id));
@@ -347,41 +462,54 @@ export default function CustomPackages() {
                       + Add New Address
                     </button>
                   </div>
-                  {savedAddresses.map((addr) => (
-                    <div
-                      key={addr.id}
-                      className="border rounded-xl p-4 flex items-start hover:bg-gray-50 cursor-pointer"
-                      onClick={() => {
-                        handleInputChange("address", addr.address);
-                        setShowAddressList(false);
-                      }}
-                    >
-                      <Image
-                        src={addr.icon}
-                        alt={addr.label}
-                        width={26}
-                        height={26}
-                        className="mr-4 mt-1"
-                      />
-                      <div className="flex-1">
-                        <h4 className="font-semibold">{addr.label}</h4>
-                        <p className="text-gray-600 text-sm">{addr.address}</p>
-                      </div>
-                      <div className="flex items-center">
-                        <div
-                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ml-2 ${
-                            formData.address === addr.address
-                              ? "border-primary bg-primary"
-                              : "border-gray-400"
-                          }`}
-                        >
-                          {formData.address === addr.address && (
-                            <div className="w-2 h-2 rounded-full bg-white" />
-                          )}
+
+                  {addressesLoading ? (
+                    <div className="text-sm text-gray-500">
+                      Loading addresses...
+                    </div>
+                  ) : savedAddresses.length === 0 ? (
+                    <div className="text-sm text-gray-500">
+                      No saved addresses found.
+                    </div>
+                  ) : (
+                    savedAddresses.map((addr) => (
+                      <div
+                        key={addr.id}
+                        className="border rounded-xl p-4 flex items-start hover:bg-gray-50 cursor-pointer"
+                        onClick={() => {
+                          handleInputChange("address", addr.address);
+                          setShowAddressList(false);
+                        }}
+                      >
+                        <Image
+                          src={addr.icon}
+                          alt={addr.label}
+                          width={26}
+                          height={26}
+                          className="mr-4 mt-1"
+                        />
+                        <div className="flex-1">
+                          <h4 className="font-semibold">{addr.label}</h4>
+                          <p className="text-gray-600 text-sm">
+                            {addr.address}
+                          </p>
+                        </div>
+                        <div className="flex items-center">
+                          <div
+                            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ml-2 ${
+                              formData.address === addr.address
+                                ? "border-primary bg-primary"
+                                : "border-gray-400"
+                            }`}
+                          >
+                            {formData.address === addr.address && (
+                              <div className="w-2 h-2 rounded-full bg-white" />
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               )}
             </div>
@@ -391,69 +519,83 @@ export default function CustomPackages() {
                 Add Service *
               </label>
 
-              {/* ✅ Main Dropdown */}
+              {/* Main Dropdown */}
               <div
-                onClick={() => setOpenMain(!openMain)} // ✅ updated
+                onClick={() => setOpenMain(!openMain)}
                 className="w-full p-3 border rounded-lg flex justify-between items-center cursor-pointer"
               >
                 <span>Select Service</span>
                 <span>{openMain ? "▲" : "▼"}</span>
               </div>
 
-              {/* ✅ Accordion inside main dropdown */}
-              {openMain && ( // ✅ updated
+              {/* Accordion inside main dropdown */}
+              {openMain && (
                 <div className="mt-3 border rounded-lg">
-                  {categories.map((cat) => (
-                    <div key={cat.id} className="border-b last:border-b-0">
-                      {/* Category Header */}
-                      <button
-                        type="button"
-                        onClick={() => toggleCategory(cat.id)}
-                        className="w-full flex items-center justify-between p-3 bg-white hover:bg-gray-50"
-                      >
-                        <div className="text-sm font-medium">{cat.title}</div>
-                        <div className="text-sm">
-                          {openCategory === cat.id ? "▲" : "▼"}
-                        </div>
-                      </button>
-
-                      {/* ✅ Sub-services */}
-                      {openCategory === cat.id && (
-                        <div className="p-3 space-y-3">
-                          {cat.subServices.map((sub) => {
-                            const uniqueId = `${cat.id}__${sub.id}`;
-                            const checked = selectedServices.some(
-                              (s) => s.id === uniqueId
-                            );
-
-                            return (
-                              <div
-                                key={uniqueId}
-                                className="flex items-center justify-between py-2 pl-4 pr-2 border-b last:border-b-0"
-                              >
-                                <span className="text-sm">{sub.name}</span>
-
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() =>
-                                    handleToggleSubService(
-                                      cat.id,
-                                      sub.id,
-                                      sub.name,
-                                      sub.price,
-                                      sub.image
-                                    )
-                                  }
-                                  className="h-4 w-4 border-primary text-primary focus:ring-primary"
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
+                  {servicesLoading ? (
+                    <div className="p-4 text-sm text-gray-500">
+                      Loading services...
                     </div>
-                  ))}
+                  ) : categories.length === 0 ? (
+                    <div className="p-4 text-sm text-gray-500">
+                      No services available.
+                    </div>
+                  ) : (
+                    categories.map((cat) => (
+                      <div key={cat.id} className="border-b last:border-b-0">
+                        {/* Category Header */}
+                        <button
+                          type="button"
+                          onClick={() => toggleCategory(cat.id)}
+                          className="w-full flex items-center justify-between p-3 bg-white hover:bg-gray-50"
+                        >
+                          <div className="text-sm font-medium">{cat.title}</div>
+                          <div className="text-sm">
+                            {openCategory === cat.id ? "▲" : "▼"}
+                          </div>
+                        </button>
+
+                        {/* Sub-services */}
+                        {openCategory === cat.id && (
+                          <div className="p-3 space-y-3">
+                            {cat.subServices.map((sub: ApiSubService) => {
+                              const uniqueId = `${cat.id}__${sub.id}`;
+                              const checked = selectedServices.some(
+                                (s) => s.id === uniqueId
+                              );
+
+                              return (
+                                <div
+                                  key={uniqueId}
+                                  className="flex items-center justify-between py-2 pl-4 pr-2 border-b last:border-b-0"
+                                >
+                                  <span className="text-sm">{sub.name}</span>
+
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() =>
+                                      handleToggleSubService(
+                                        String(cat.id),
+                                        String(sub.id),
+                                        String(sub.name),
+                                        typeof sub.price === "number"
+                                          ? sub.price
+                                          : 0,
+                                        sub.image
+                                          ? String(sub.image)
+                                          : undefined
+                                      )
+                                    }
+                                    className="h-4 w-4 border-primary text-primary focus:ring-primary"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               )}
             </div>
@@ -488,7 +630,7 @@ export default function CustomPackages() {
 
           {/* RIGHT SUMMARY */}
           <div className="bg-white   p-4  space-y-4">
-            {/* When no services selected show the "No service Added" card (matching screenshot) */}
+            {/* When no services selected show the "No service Added" card */}
             {selectedServices.length === 0 ? (
               <div className="flex items-center justify-center p-8 border rounded-xl h-64">
                 <div className="text-center">
@@ -542,7 +684,7 @@ export default function CustomPackages() {
                     )}
 
                     <div className="flex-1">
-                      {/* ✅ top row: service name + close */}
+                      {/* top row: service name + close */}
                       <div className="flex justify-between items-center mb-1">
                         <div className="font-medium text-[14px]">
                           {sel.name}
@@ -555,7 +697,7 @@ export default function CustomPackages() {
                         </button>
                       </div>
 
-                      {/* ✅ next line: price left, qty right */}
+                      {/* next line: price left, qty right */}
                       <div className="flex justify-between items-center">
                         <span className="text-primary text-[13px]">
                           {sel.price} AED
@@ -584,7 +726,6 @@ export default function CustomPackages() {
             )}
 
             {/* Totals */}
-            {/* ✅ Show NO PAYMENT UI when nothing selected */}
             {selectedServices.length === 0 ? null : (
               <>
                 {/* Totals */}
