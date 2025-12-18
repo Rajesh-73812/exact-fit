@@ -22,7 +22,7 @@ const AboutUs: React.FC = () => {
               alt="About 1"
               width={150}
               height={150}
-              className="w-full h-full object-cover radius-lg"
+              className="w-full h-full object-cover rounded-tl-2xl"
             />
             <Image
               src={About2}

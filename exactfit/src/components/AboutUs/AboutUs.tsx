@@ -7,36 +7,36 @@ import BG_Shape from "@/public/Bg_shape.svg";
 
 // ✅ Import your images (replace with actual file paths)
 import AboutBanner from "@/public/about_banner.svg";
-import TeamImage from "@/public/about_img1.svg";
+import TeamImage from "@/public/About_us_banner.png";
 import ReliableIcon from "@/public/Right_mark.svg";
 import ProfessionalIcon from "@/public/Right_mark.svg";
 import ExperiencedIcon from "@/public/Right_mark.svg";
 import SecureIcon from "@/public/Right_mark.svg";
-import AboutImage1 from "@/public/About-image1.svg";
-import AboutImage2 from "@/public/About_image2.svg";
-import AboutImage3 from "@/public/About_image3.svg";
-import AboutImage4 from "@/public/About_image4.svg"
+import AboutImage1 from "@/public/About-1.jpg";
+import AboutImage2 from "@/public/About-2.jpg";
+import AboutImage3 from "@/public/About-3.jpg";
+import AboutImage4 from "@/public/About-4.jpg";
 
 export default function AboutUs() {
   const values = [
     {
-      title: "Reliable",
-      desc: "On time & accurate",
+      title: "Technical Mastery",
+      desc: "Expertise delivered by certified, licensed specialists in every trade",
       icon: ReliableIcon,
     },
     {
-      title: "Professional Technicians",
-      desc: "Highly trained and certified technicians",
+      title: "Total Solutions",
+      desc: "A single platform managing both scheduled care and large-scale projects.",
       icon: ProfessionalIcon,
     },
     {
-      title: "Highly Experienced",
-      desc: "Experience over years in this business",
+      title: "Audited Accountability",
+      desc: "Mandatory digital consent and clear online billing for transparent, authorized service.",
       icon: ExperiencedIcon,
     },
     {
-      title: "Safe and Secure",
-      desc: "Lorem ipsum dolor sit amet,",
+      title: "On-Demand Readiness",
+      desc: "24/7 access and rapid dispatch via our efficient auto-assign system.",
       icon: SecureIcon,
     },
   ];
@@ -170,13 +170,12 @@ export default function AboutUs() {
         </span>
       <p className="relative text-gray-800  md:text-lg leading-relaxed font-medium">
         
-        Exact Fit was founded on a simple belief: that maintaining a comfortable,
-        functional home or facility shouldn’t be a source of stress. We saw a need
-        for a reliable, all-in-one service provider that treats every job—from a
-        minor plumbing fix to a major AC overhaul—with the utmost professionalism.
-        Our growth is a testament to our commitment to that original vision,
-        establishing us as the trusted name for home and facility services in the
-        region.
+       At Exact FiT, we are dedicated to setting a new standard for home and facility services. Founded on
+the principle of precision maintenance and guaranteed satisfaction, we simplify the complexity of
+property care. We serve as your single, trusted partner, leveraging certified expertise and a fully
+digital, transparent platform to manage everything from minor, urgent repairs to major, large-scale
+renovation projects. Our goal is simple: to secure the value of your assets with reliable, on-time,
+and high-quality service, every time.
         
       </p>
       <span className="absolute -bottom-13 -right-3 font-serif text-[60px] text-primary">
