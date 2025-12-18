@@ -12,7 +12,7 @@ import { getToken } from "@/lib/getToken";
 const apiClient: AxiosInstance = axios.create({
   baseURL:
     process.env.NEXT_PUBLIC_API_URL ||
-    "http://localhost:4446/api/" ||
+    // "http://localhost:4446/api/" ||
     "https://exact-fit-server.vercel.app/api/", // <-- change from env only
   timeout: 30000,
   headers: {
