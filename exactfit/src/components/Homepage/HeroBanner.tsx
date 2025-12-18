@@ -1,9 +1,9 @@
 "use client";
 import Image from "next/image";
 
-import HeroImage1 from "../../../public/HeroBanner_1.png";
-import HeroImage2 from "../../../public/HeroBanner_2.png";
-import HeroImage3 from "../../../public/HeroBanner_3.png";
+import HeroImage1 from "../../../public/Hero-image5.jpg";
+import HeroImage2 from "../../../public/Hero-image3.jpg";
+import HeroImage3 from "../../../public/Hero-image4.jpg";
 import TopArrow from "../../../public/Top-arrow.svg";
 import BottomArrow from "../../../public/Bottom-arrow.svg";
 import Link from "next/link";
@@ -16,16 +16,16 @@ export default function HeroBanner() {
           {/* ✅ Left: Text Section */}
           <div className="flex-1 text-left space-y-6">
             <h1 className="text-4xl sm:text-5xl lg:text-5xl font-bold text-gray-900 leading-tight">
-              <span className="text-primary">Exact Fit</span>
+              <span className="text-primary">Your Maintenance Solved.</span>
               <br />
-              For Every Home,
+              Always On Time,
               <br />
-              Every Time.
+              Always Exact.
             </h1>
 
             <p className="text-lg sm:text-xl text-gray-600 max-w-lg">
-              &quot;Don&apos;t wait, get it done right. The perfect fit is just
-              a call away.&quot;
+              Our unified platform simplifies recurring maintenance, emergency repairs, and large-scale fit-out
+projects.
             </p>
 
             <Link href="/contactus">

@@ -1,7 +1,7 @@
 "use client";
 import React from 'react';
 import Image from 'next/image';
-import ChooseUS from "@/public/ChooseUS.png"
+import ChooseUS from "@/public/WhychooseUs-1.jpg"
 import Tools from "@/public/tools.svg"
 import Support from "@/public/Support.svg"
 import Truck from "@/public/Truck_Icon.svg"
@@ -17,23 +17,23 @@ const WhyChooseUs: React.FC = () => {
   const features: Feature[] = [
     {
       icon: Tools,
-      title: 'Professional Technicians',
-      description: 'Certified, and experienced professionals. They undergo training and background checks to ensure...'
+      title: 'All-in-One Convenience',
+      description: 'Stop calling multiple contractors. We cover all your needs from minor appliance repairs to major civil works—all managed under one reliable system.'
     },
     {
       icon: Badge,
-      title: '100% Secure',
-      description: 'Your security is our top priority. We use data encryption to protect all your...'
+      title: 'Seamless 24/7 Access',
+      description: 'As a registered member, you gain 24/7 access to initiate service requests. Our auto-dispatch system ensures the fastest possible response for emergencies.'
     },
     {
       icon: Support,
-      title: '24/7 Support',
-      description: 'We offer 24/7 support so you\'re never left in the dark. Our dedicated support team is always...'
+      title: 'Comprehensive Coverage',
+      description: 'We provide total peace of mind, covering all service types from appliance repairs to large-scale interior fit-outs—under one accountable brand.'
     },
     {
       icon: Truck,
-      title: 'Punctual Service',
-      description: 'Utilize efficient scheduling and dispatch systems to ensure our...'
+      title: 'Audited Accountability',
+      description: 'Our process is fully transparent. Digital consent is mandatory before any emergency repair payment is processed, securing your authorization and protecting your interests.'
     }
   ];
 
@@ -44,7 +44,8 @@ const WhyChooseUs: React.FC = () => {
       <div className="text-center mb-12">
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Why Choose Us?</h2>
         <p className="text-[16px] text-gray-600 max-w-2xl mx-auto">
-          Many reasons why customers choose us than other eCommerce. We have some plus point that may other can&apos;t have.
+          Our service is built on unwavering transparency and an emphatic commitment to customer
+satisfaction, guaranteeing every action is fully authorized and fully accountable.
         </p>
       </div>
 

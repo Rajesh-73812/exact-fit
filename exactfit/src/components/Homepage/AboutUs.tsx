@@ -1,10 +1,10 @@
 "use client";
 import React from "react";
 import Image from "next/image";
-import About1 from "@/public/About_1.svg";
-import About2 from "@/public/About_2.svg";
-import About3 from "@/public/About_3.svg";
-import About4 from "@/public/About_4.svg";
+import About1 from "@/public/About-1.jpg";
+import About2 from "@/public/About-2.jpg";
+import About3 from "@/public/About-3.jpg";
+import About4 from "@/public/About-4.jpg";
 
 const AboutUs: React.FC = () => {
   return (
@@ -22,7 +22,7 @@ const AboutUs: React.FC = () => {
               alt="About 1"
               width={150}
               height={150}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover radius-lg"
             />
             <Image
               src={About2}
@@ -59,11 +59,11 @@ const AboutUs: React.FC = () => {
           </h2>
 
           <p className="text-lg text-left text-gray-700 leading-relaxed">
-            At Exact Fit, we make your comfort and convenience our top priority.
-            As a trusted home and facility services provider, we specialize in
-            delivering reliable solutions for all your maintenance needs – from
-            AC servicing and electrical works to plumbing, gardening, deep
-            cleaning, and complete building maintenance.
+            Exact Fix offers a total service solution, engineered for the demands of modern residential and
+commercial facilities. Our service offerings span the entire spectrum rom quick emergency fixes
+and scheduled care covered by your annual subscription, to the meticulous planning and execution
+of major Enquiry-Based renovation projects. We commit to on-time performance and are
+exclusively dedicated to providing the highest quality results
           </p>
         </div>
 
