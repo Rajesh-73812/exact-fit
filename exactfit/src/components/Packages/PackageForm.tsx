@@ -1,5 +1,4 @@
 "use client";
-
 import React, { useEffect, useState } from "react";
 import Navbar from "@/src/components/Navbar/Navbar";
 import Image from "next/image";
@@ -7,34 +6,27 @@ import Years_Packages from "@/public/Years_Packages.svg";
 import Footer from "@/src/components/Homepage/Footer";
 import apiClient from "@/lib/apiClient";
 import { useRouter, useSearchParams } from "next/navigation";
-
 import { getCountries, getCountryCallingCode } from "react-phone-number-input";
 import type { CountryCode } from "libphonenumber-js";
 import "react-phone-number-input/style.css";
-
 import Filled_star from "@/public/Filled_star.svg";
 import HomeIcon from "@/public/home_icon.svg";
 import { Star } from "lucide-react";
-
 type AddressItem = {
   id: string | number;
   label: string;
   address: string;
   icon?: any;
 };
-
 type Props = {
   selectedPlan?: string;
 };
-
 const FALLBACK_USER_ID = "492d20af-6f1b-44c6-9454-2cc827e3a4af";
-
 function getUserIdFromLocalToken(): string | null {
   try {
     if (typeof window === "undefined") return null;
     const token = localStorage.getItem("token") || localStorage.getItem("access_token") || localStorage.getItem("authToken"); // try common keys
     if (!token) return null;
-
     // JWT parse (no verification) to read payload
     const parts = token.split(".");
     if (parts.length < 2) return null;
@@ -56,22 +48,19 @@ function getUserIdFromLocalToken(): string | null {
     return null;
   }
 }
-
 export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-
   const [planSlug, setPlanSlug] = useState<string | undefined>(undefined);
   const [apiPlan, setApiPlan] = useState<any | null>(null);
   const [planLoading, setPlanLoading] = useState(false);
-
   const [addresses, setAddresses] = useState<AddressItem[]>([]);
-  const [propertyTypes, setPropertyTypes] = useState<string[]>([]);
+  const [propertyTypeOptions, setPropertyTypeOptions] = useState<{ id: string | number; name: string }[]>([]);
   const [countryOptions, setCountryOptions] = useState<{ value: string; label: string }[]>([]);
-
   const [showAddressList, setShowAddressList] = useState(false);
   const [showPropertyOptions, setShowPropertyOptions] = useState(false);
-
+  const [planId, setPlanId] = useState<string | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -83,10 +72,8 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
     propertyType: "",
     terms: false,
   });
-
   const [isFormValid, setIsFormValid] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
   const emirates = [
     "Dubai",
     "Abu Dhabi",
@@ -96,12 +83,10 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
     "Ras Al Khaimah",
     "Fujairah",
   ];
-
   // resolve planSlug priority: prop -> ?plan= -> localStorage
   useEffect(() => {
     const urlPlan = typeof window !== "undefined" ? searchParams.get("plan") ?? undefined : undefined;
     const storagePlan = typeof window !== "undefined" ? localStorage.getItem("selectedPlan") ?? undefined : undefined;
-
     const resolved =
       propSelectedPlan && propSelectedPlan.trim() !== ""
         ? propSelectedPlan
@@ -110,10 +95,8 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
         : storagePlan && storagePlan.trim() !== ""
         ? storagePlan
         : undefined;
-
     setPlanSlug(resolved);
   }, [propSelectedPlan, searchParams?.toString()]);
-
   // fetch plan details by slug
   useEffect(() => {
     if (!planSlug) {
@@ -126,6 +109,7 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
         const res = await apiClient.get(`/user/plan/V1/get-plan-by-slug/${encodeURIComponent(planSlug)}`);
         // api returns res.data.data which contains plan object
         const plan = res?.data?.data ?? null;
+        setPlanId(plan?.id ?? null);
         setApiPlan(plan);
         // set form category default from plan
         if (plan?.category) {
@@ -138,33 +122,36 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
         setPlanLoading(false);
       }
     };
-
     fetchPlan();
   }, [planSlug]);
-
   // fetch addresses and prepare country codes from react-phone-number-input
   useEffect(() => {
     const fetchLists = async () => {
       // determine user id: token -> fallback
       const detectedUserId = getUserIdFromLocalToken() ?? FALLBACK_USER_ID;
-
       try {
         // send userId as query param to retrieve user-specific addresses
-        const addrEndpoint = `/user/address/V1/get-addresses${detectedUserId ? `?userId=${encodeURIComponent(detectedUserId)}` : ""}`;
+        const addrEndpoint = `/user/user-auth/V1/user-details`;
         const addrRes = await apiClient.get(addrEndpoint, { skipAuth: true });
-        const rows = addrRes.data?.data?.rows ?? addrRes.data?.data ?? [];
-        const mapped = (Array.isArray(rows) ? rows : []).map((a: any) => ({
-          id: a.id ?? a.address_id ?? Math.random(),
-          label: a.label ?? a.name ?? a.address_label ?? "Address",
-          address: a.full_address ?? a.address ?? `${a.street ?? ""} ${a.city ?? ""}`.trim(),
-          icon: HomeIcon,
-        }));
-        setAddresses(mapped);
+        const addrList = addrRes.data?.data?.addresses ?? [];
+const mapped = (Array.isArray(addrList) ? addrList : []).map((a: any) => ({
+  id: a.id,
+  label: a.save_as_address_type || "Address",
+  address: [
+    a.appartment,
+    a.building,
+    a.area,
+    a.emirate,
+  ]
+    .filter(Boolean)
+    .join(", "),
+  icon: HomeIcon,
+}));
+setAddresses(mapped);
       } catch (err) {
         console.warn("addresses fetch failed:", err);
         setAddresses([]);
       }
-
       // build country list using react-phone-number-input
       try {
         const countries = getCountries(); // returns country codes like 'AE', 'IN', 'US'
@@ -185,36 +172,32 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
         setFormData((p) => ({ ...p, countryCode: "+971" }));
       }
     };
-
     fetchLists();
   }, []);
-
   // fetch property types for the selected plan (use plan id when available) and include user id
   useEffect(() => {
-    const fetchPropertyTypesByPlan = async () => {
-      const planId = apiPlan?.id ?? planSlug; // prefer numeric id; fallback to slug if backend accepts it
-      if (!planId) {
-        setPropertyTypes([]);
-        return;
-      }
-
-      const detectedUserId = getUserIdFromLocalToken() ?? FALLBACK_USER_ID;
-
-      try {
-        // include userId as query param so server can use it
-        const endpoint = `/user/property/V1/get-all-property/${encodeURIComponent(String(planId))}?userId=${encodeURIComponent(detectedUserId)}`;
-        const propRes = await apiClient.get(endpoint);
-        const props = propRes.data?.data ?? [];
-        setPropertyTypes(Array.isArray(props) ? props.map((p: any) => String(p.name ?? p.type ?? p)) : []);
-      } catch (err) {
-        console.warn("property types fetch failed for plan:", planId, err);
-        setPropertyTypes([]);
-      }
-    };
-
-    fetchPropertyTypesByPlan();
-  }, [apiPlan?.id, planSlug]);
-
+  const fetchPropertyTypesByPlan = async () => {
+    if (!planId) {
+      setPropertyTypeOptions([]);
+      return;
+    }
+    try {
+      const endpoint = `/user/property/V1/get-all-property/${encodeURIComponent(planId)}`;
+      const propRes = await apiClient.get(endpoint);
+      const props = propRes.data?.data ?? [];
+      console.log(props,"propsssssssssssss")
+      setPropertyTypeOptions(
+        Array.isArray(props)
+          ? props.map((p: any) => ({ id: p.id, name: p.propertyName }))
+          : []
+      );
+    } catch (err) {
+      console.warn("property types fetch failed for plan:", planId, err);
+      setPropertyTypeOptions([]);
+    }
+  };
+  fetchPropertyTypesByPlan();
+}, [planId]);
   useEffect(() => {
     const valid =
       !!formData.fullName &&
@@ -226,39 +209,48 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
       !!formData.terms;
     setIsFormValid(valid);
   }, [formData]);
-
   const handleChange = (field: string, value: any) => setFormData((p) => ({ ...p, [field]: value }));
-
   const selectAddress = (addr: AddressItem) => {
+    setSelectedAddressId(addr.id.toString());
     setFormData((p) => ({ ...p, address: addr.label }));
     setShowAddressList(false);
   };
-
   const addNewAddress = () => {
     const label = prompt("Address label (Home/Work):", "New Address");
     const address = prompt("Full address:", "");
     if (!label || !address) return;
-    const newAddr: AddressItem = { id: `new-${Date.now()}`, label, address, icon: HomeIcon };
+    const newId = `new-${Date.now()}`;
+    const newAddr: AddressItem = { id: newId, label, address, icon: HomeIcon };
     setAddresses((p) => [newAddr, ...p]);
     setFormData((p) => ({ ...p, address: label }));
+    setSelectedAddressId(null);
     setShowAddressList(false);
   };
-
   const handleSubmit = async () => {
-    if (!isFormValid) return;
+    if (!isFormValid || !planId) return;
     setSubmitting(true);
     try {
+      const start_date = new Date().toISOString().slice(0, 10);
+      const end_date = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const priceRaw = apiPlan?.base_price ?? apiPlan?.price ?? apiPlan?.basePrice ?? 0;
+      const price_total = typeof priceRaw === "number" ? priceRaw : parseFloat(String(priceRaw).replace(/[^\d.]/g, "")) || 0;
+      const payment_option = "yearly";
       const payload = {
-        plan_slug: planSlug,
+        plan_id: planId,
+        property_type_id: formData.propertyType || null,
+        address_id: selectedAddressId || null,
+        start_date,
+        end_date,
+        price_total,
+        payment_option,
         full_name: formData.fullName,
         email: formData.email,
         mobile: `${formData.countryCode}${formData.mobile}`,
         emirate: formData.emirate,
         address_label: formData.address,
         category: formData.category,
-        property_type: formData.propertyType,
       };
-      const res = await apiClient.post("/user/plan/V1/subscribe", payload);
+      const res = await apiClient.post("/user/user-subscription/V1/create-subscription-plan", payload);
       alert(res?.data?.message || "Subscription successful");
       if (planSlug) localStorage.setItem("selectedPlan", planSlug);
       router.push(`/payment?plan=${planSlug}`);
@@ -269,7 +261,6 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
       setSubmitting(false);
     }
   };
-
   // left form / right summary derived values
   const priceRaw = apiPlan?.base_price ?? apiPlan?.price ?? apiPlan?.basePrice ?? "AED 0";
   const price = typeof priceRaw === "number" ? `AED ${priceRaw}` : (priceRaw as string);
@@ -279,7 +270,6 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
     Array.isArray(apiPlan?.included) ? apiPlan.included :
     Array.isArray(apiPlan?.features) ? apiPlan.features :
     [];
-
   const renderStars = (filled: number) => (
     <div className="relative w-16 h-12 mb-2">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1.5 w-6 h-6 flex items-center justify-center">
@@ -293,7 +283,6 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
       </div>
     </div>
   );
-
   // If planSlug isn't present, keep a simple fallback view (redirect or ask user)
   if (!planSlug && !apiPlan) {
     return (
@@ -308,34 +297,27 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
       </div>
     );
   }
-
   return (
     <div className="bg-white">
       <div className="p-2"><Navbar /></div>
-
       <Image src={Years_Packages} alt="Year banner" width={500} height={300} className="w-full h-auto" />
-
       <div className="px-4 md:px-10 lg:px-20 py-8 grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-8">
         <div className="bg-white border rounded-xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold">Package Details - {planName}</h2>
             <div className="text-xs px-3 py-1 border rounded-full bg-gray-50 text-gray-700">{planName}</div>
           </div>
-
           {planLoading && <p className="text-sm text-gray-500 mb-4">Loading latest plan details...</p>}
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium mb-1">Full Name *</label>
               <input className="w-full p-2 border rounded-lg" value={formData.fullName} onChange={(e) => handleChange("fullName", e.target.value)} />
             </div>
-
             <div>
               <label className="block text-sm font-medium mb-1">Email *</label>
               <input className="w-full p-2 border rounded-lg" value={formData.email} onChange={(e) => handleChange("email", e.target.value)} />
             </div>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block text-sm font-medium mb-1">Mobile Number *</label>
@@ -346,7 +328,6 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
                 <input className="flex-1 p-2 border rounded-r-lg" value={formData.mobile} onChange={(e) => handleChange("mobile", e.target.value.replace(/\D/g, ""))} maxLength={12} />
               </div>
             </div>
-
             <div>
               <label className="block text-sm font-medium mb-1">Choose Emirate *</label>
               <select className="w-full p-2 border rounded-lg" value={formData.emirate} onChange={(e) => handleChange("emirate", e.target.value)}>
@@ -355,21 +336,18 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
               </select>
             </div>
           </div>
-
           <div className="mb-4">
             <label className="block text-sm font-medium mb-1">Select Address *</label>
             <div onClick={() => setShowAddressList((s) => !s)} className="w-full p-3 border rounded-lg flex justify-between items-center cursor-pointer">
               <span>{formData.address || "Select Address"}</span>
               <span>▼</span>
             </div>
-
             {showAddressList && (
               <div className="mt-3 border rounded-lg p-3 max-h-56 overflow-auto">
                 <div className="flex justify-between items-center mb-2">
                   <div className="font-semibold">Saved Addresses</div>
                   <button onClick={addNewAddress} className="bg-primary text-white px-3 py-1 rounded-full text-sm">+ Add New address</button>
                 </div>
-
                 <div className="space-y-3">
                   {addresses.length ? addresses.map((addr) => (
                     <div key={addr.id} className="border rounded-lg p-3 flex items-start hover:bg-gray-50">
@@ -391,45 +369,36 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
               </div>
             )}
           </div>
-
           <div className="mb-4">
             <label className="block text-sm font-medium mb-1">Choose property Type *</label>
             <div className="relative">
               <select className="w-full p-2 border rounded-lg" value={formData.propertyType} onChange={(e) => handleChange("propertyType", e.target.value)}>
                 <option value="">Select Property Type</option>
-                {propertyTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+                {propertyTypeOptions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
-
-              <div className="mt-2">
-                <button type="button" onClick={() => setShowPropertyOptions((s) => !s)} className="text-sm text-primary underline">Show all options</button>
-              </div>
-
               {showPropertyOptions && (
                 <div className="mt-3 border rounded-lg p-3 max-h-44 overflow-auto">
-                  {propertyTypes.map((t) => (
-                    <label key={t} className="flex items-center justify-between border-b py-2 last:border-b-0 cursor-pointer">
-                      <span>{t}</span>
-                      <input type="radio" name="propertyTypeRadio" checked={formData.propertyType === t} onChange={() => handleChange("propertyType", t)} />
+                  {propertyTypeOptions.map((p) => (
+                    <label key={p.id} className="flex items-center justify-between border-b py-2 last:border-b-0 cursor-pointer">
+                      <span>{p.name}</span>
+                      <input type="radio" name="propertyTypeRadio" checked={formData.propertyType === p.id} onChange={() => handleChange("propertyType", p.id)} />
                     </label>
                   ))}
-                  {propertyTypes.length === 0 && <div className="text-sm text-gray-500">No property types available</div>}
+                  {propertyTypeOptions.length === 0 && <div className="text-sm text-gray-500">No property types available</div>}
                 </div>
               )}
             </div>
           </div>
-
           <label className="flex items-start gap-3 mb-6 text-sm">
             <input type="checkbox" checked={formData.terms} onChange={(e) => handleChange("terms", e.target.checked)} className="mt-1" />
             <div>I accept the <span className="text-primary">Terms & Conditions</span> and <span className="text-primary">Privacy Policy</span></div>
           </label>
-
           <div className="flex justify-end">
             <button disabled={!isFormValid || submitting} onClick={handleSubmit} className={`w-[30%] py-3 rounded-lg font-medium transition ${isFormValid ? "bg-primary text-white hover:bg-primary" : "bg-gray-300 text-gray-500 cursor-not-allowed"}`}>
               {submitting ? "Submitting..." : "Continue Payment"}
             </button>
           </div>
         </div>
-
         <aside className="bg-white max-h-max border rounded-xl p-4 shadow-sm">
           <div className="text-center mb-3">
             <h3 className="text-lg font-bold">{planName} starts from</h3>
@@ -438,7 +407,6 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
               {renderStars(stars)}
             </div>
           </div>
-
           <h4 className="font-semibold mb-2 text-sm">What's included:</h4>
           <div className="text-xs text-gray-700 space-y-1 mb-4">
             {/* If API returned structured included array show that, otherwise show description HTML */}
@@ -452,14 +420,12 @@ export default function PackageForm({ selectedPlan: propSelectedPlan }: Props) {
               <div className="text-gray-500">Plan details loading...</div>
             )}
           </div>
-
           <div className="text-right">
             <p className="text-base font-bold">Package Cost</p>
             <p className="text-xl font-bold text-primary">{price}/year</p>
           </div>
         </aside>
       </div>
-
       <Footer />
     </div>
   );

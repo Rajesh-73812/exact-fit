@@ -29,7 +29,7 @@ const AboutUs: React.FC = () => {
               alt="About 2"
               width={150}
               height={150}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover rounded-tr-2xl"
             />
           </div>
 
@@ -39,14 +39,14 @@ const AboutUs: React.FC = () => {
               alt="About 3"
               width={150}
               height={150}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover rounded-bl-2xl"
             />
             <Image
               src={About4}
               alt="About 4"
               width={150}
               height={150}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover rounded-br-2xl"
             />
           </div>
 
