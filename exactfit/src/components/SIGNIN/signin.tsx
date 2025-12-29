@@ -105,7 +105,12 @@ export default function SignIn({
         } else if (phone) {
           localStorage.setItem("userPhone", phone);
         }
-        router.push("/profilesetup");
+        const isProfileUpdated = res.data.data?.user?.is_profile_update;
+        if (isProfileUpdated === false) {
+  router.push("/profilesetup");
+} else {
+  router.push("/");
+}
       } else {
         setOtpError(res.data?.message || "OTP verification failed");
       }

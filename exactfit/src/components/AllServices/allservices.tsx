@@ -145,11 +145,11 @@ export default function AllServices() {
 
   return (
     <div className="text-center bg-white p-4" id="All-Services">
-      <div className="p-6">
+      <div className="p-2">
         <Navbar />
       </div>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-12 py-8">
         <div className="flex flex-col md:flex-row gap-8">
           {/* SIDEBAR */}
           <aside className="w-full md:w-1/3 border p-4 rounded-lg space-y-6">
@@ -193,9 +193,9 @@ export default function AllServices() {
                     <Image
                       src={cat.icon}
                       alt={cat.title}
-                      width={24}
-                      height={24}
-                      className="h-6 w-6 mb-2 object-contain"
+                      width={30}
+                      height={30}
+                      className="h-12 w-12 mb-2 object-contain"
                       style={{ width: "24", height: "24" }}
                     />
                     <CardTitle className="text-sm text-center">
