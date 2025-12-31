@@ -7,26 +7,9 @@ import Footer from "../Homepage/Footer";
 import HomeIcon from "@/public/home_icon.svg";
 import WorkIcon from "@/public/work_icon.svg";
 import OfficeIcon from "@/public/office_icon.svg";
+import CheckIcon from "@/public/checked_circle.svg"; // Add this import; replace with actual path if needed
 import { useRouter } from "next/navigation";
 import apiClient from "@/lib/apiClient";
-
-/**
- * Full updated CustomPackages.tsx
- * - Keeps layout & styles unchanged
- * - Replaces static addresses and categories with API-driven data
- * - Uses OPTIONAL_USER_ID fallback when no token available
- *
- * Notes:
- * - Addresses endpoint used: /user/user-auth/V1/user-details?id=<userId>
- *   expected shape: { data: { addresses: [ { id, save_as_address_type, location, ... } ] } }
- *
- * - Services endpoint used: user/dashboard/V1/get-all-services-sub-services?id=<userId>
- *   expected to return an array of categories each with sub-services.
- *   Normalized into the same shape used by the UI:
- *     { id, title, subServices: [{ id, name, price, image }] }
- *
- * - Keep UI & style exactly as in the provided file.
- */
 
 type SelectedService = {
   id: string; // unique string id (category_subservice)
@@ -65,8 +48,6 @@ type ApiCategory = {
   children?: any[];
 };
 
-const OPTIONAL_USER_ID = "492d20af-6f1b-44c6-9454-2cc827e3a4af";
-
 export default function CustomPackages() {
   const router = useRouter();
 
@@ -77,6 +58,7 @@ export default function CustomPackages() {
     countryCode: "+971",
     emirate: "",
     address: "",
+    addressId: null as string | number | null,
   });
 
   const [categoryType, setCategoryType] = useState<
@@ -102,11 +84,16 @@ export default function CustomPackages() {
 
   // API-driven saved addresses (replaces static savedAddresses)
   const [savedAddresses, setSavedAddresses] = useState<
-    { id: string | number; label: string; address: string; icon: any }[]
+    { id: string | number; label: string; address: string; icon: any; emirate?: string }[]
   >([]);
 
   const [addressesLoading, setAddressesLoading] = useState(false);
   const [servicesLoading, setServicesLoading] = useState(false);
+
+  // Popup state
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupMessage, setPopupMessage] = useState("");
+  const [isError, setIsError] = useState(false);
 
   const emirates = [
     "Dubai",
@@ -120,18 +107,18 @@ export default function CustomPackages() {
 
   // -------------------------
   // Helper: read user id from JWT stored in localStorage
-  // fallback to OPTIONAL_USER_ID when token not present or decode fails
+  // no fallback - return null if token missing or invalid
   // -------------------------
   const getUserIdFromLocalToken = () => {
     try {
-      if (typeof window === "undefined") return OPTIONAL_USER_ID;
+      if (typeof window === "undefined") return null;
       const token =
         localStorage.getItem("token") ||
         localStorage.getItem("accessToken") ||
         localStorage.getItem("authToken");
-      if (!token) return OPTIONAL_USER_ID;
+      if (!token) return null;
       const parts = token.split(".");
-      if (parts.length < 2) return OPTIONAL_USER_ID;
+      if (parts.length < 2) return null;
       const payload = parts[1];
       const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
       const decoded = decodeURIComponent(
@@ -141,9 +128,9 @@ export default function CustomPackages() {
           .join("")
       );
       const obj = JSON.parse(decoded);
-      return obj?.id || obj?.user_id || obj?.sub || OPTIONAL_USER_ID;
+      return obj?.id || obj?.user_id || obj?.sub || null;
     } catch (e) {
-      return OPTIONAL_USER_ID;
+      return null;
     }
   };
 
@@ -160,10 +147,24 @@ export default function CustomPackages() {
     setAddressesLoading(true);
     try {
       const userId = getUserIdFromLocalToken();
+      if (!userId) {
+        setSavedAddresses([]);
+        return;
+      }
       const res = await apiClient.get(
         `/user/user-auth/V1/user-details?id=${userId}`
       );
       const user = res?.data?.data ?? res?.data ?? null;
+
+      // Prefill form from user data
+      if (user) {
+        setFormData((prev) => ({
+          ...prev,
+          fullName: user.fullname || prev.fullName,
+          email: user.email || prev.email,
+          mobile: user.mobile || prev.mobile,
+        }));
+      }
 
       let apiAddresses: any[] = [];
       if (Array.isArray(user?.addresses)) apiAddresses = user.addresses;
@@ -188,6 +189,7 @@ export default function CustomPackages() {
           label,
           address,
           icon,
+          emirate: a.emirate,
         };
       });
 
@@ -204,6 +206,10 @@ export default function CustomPackages() {
     setServicesLoading(true);
     try {
       const userId = getUserIdFromLocalToken();
+      if (!userId) {
+        setCategories([]);
+        return;
+      }
       const res = await apiClient.get(
         `user/dashboard/V1/get-all-services-sub-services?id=${userId}`
       );
@@ -215,6 +221,14 @@ export default function CustomPackages() {
         setServicesLoading(false);
         return;
       }
+
+      // Helper for price parsing
+      const parseNumberOrNull = (v: any): number | null => {
+        if (v === null || v === undefined || v === "") return null;
+        // remove commas, trim, then parse
+        const n = parseFloat(String(v).replace(/,/g, "").trim());
+        return Number.isFinite(n) ? n : null;
+      };
 
       // Normalize various possible shapes into { id, title, subServices[] }
       const normalized = data.map((cat: ApiCategory, idx: number) => {
@@ -251,15 +265,6 @@ export default function CustomPackages() {
               it.uuid ??
               `s-${idx}-${sidx}`;
             // price may be present under various keys; fallback to 0
-            // add this helper above the mapping (inside fetchServices or top of file):
-            const parseNumberOrNull = (v: any): number | null => {
-              if (v === null || v === undefined || v === "") return null;
-              // remove commas, trim, then parse
-              const n = parseFloat(String(v).replace(/,/g, "").trim());
-              return Number.isFinite(n) ? n : null;
-            };
-
-            // replacement for price calculation:
             const price =
               parseNumberOrNull(it.price) ??
               parseNumberOrNull(it.amount) ??
@@ -342,14 +347,76 @@ export default function CustomPackages() {
   const taxes = 50;
   const total = subtotal - discount + taxes;
 
-  const handlePayNow = () => {
-    // replace with real payment flow
-    console.log("Pay now clicked", {
-      formData,
-      categoryType,
-      selectedServices,
-      total,
-    });
+  const handleClosePopup = () => {
+    setShowPopup(false);
+    setPopupMessage("");
+    setIsError(false);
+    // Redirect on success after close
+    if (!isError) {
+      router.push("/subscription-success"); // Adjust route as needed
+    }
+  };
+
+  const handlePayNow = async () => {
+    // Validation
+    if (
+      !formData.fullName ||
+      !formData.email ||
+      !formData.mobile ||
+      !formData.emirate ||
+      !formData.addressId ||
+      selectedServices.length === 0
+    ) {
+      setPopupMessage("Please fill all required fields and select at least one service.");
+      setIsError(true);
+      setShowPopup(true);
+      return;
+    }
+
+    // Prepare body
+    const today = new Date().toISOString().split("T")[0];
+    const endDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split("T")[0];
+
+    const body = {
+      address_id: formData.addressId,
+      start_date: today,
+      payment_option: "yearly",
+      end_date: endDate,
+      total_price: total,
+      service_id: null,
+      services: selectedServices.map((s) => {
+        const [service_id, subservice_id] = s.id.split("__");
+        return {
+          service_id,
+          subservice_id,
+          quantity: s.qty,
+          unit_price: s.price,
+        };
+      }),
+    };
+
+    try {
+      const res = await apiClient.post(
+        `/user/user-subscription/V1/create-custom-subscription-plan`,
+        body
+      );
+      if (res.data.success) {
+        setPopupMessage("Subscription created successfully!");
+        setIsError(false);
+        setShowPopup(true);
+      } else {
+        setPopupMessage(res.data.message || "Failed to create subscription.");
+        setIsError(true);
+        setShowPopup(true);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setPopupMessage(err.response?.data?.message || "Failed to create subscription.");
+      setIsError(true);
+      setShowPopup(true);
+    }
   };
 
   return (
@@ -477,7 +544,12 @@ export default function CustomPackages() {
                         key={addr.id}
                         className="border rounded-xl p-4 flex items-start hover:bg-gray-50 cursor-pointer"
                         onClick={() => {
-                          handleInputChange("address", addr.address);
+                          setFormData((prev) => ({
+                            ...prev,
+                            address: addr.address,
+                            addressId: addr.id,
+                            emirate: addr.emirate || prev.emirate,
+                          }));
                           setShowAddressList(false);
                         }}
                       >
@@ -770,6 +842,61 @@ export default function CustomPackages() {
       </div>
 
       <Footer />
+
+      {/* Popup */}
+      {showPopup && (
+        <div
+          className="fixed inset-0 bg-black/40 flex items-center justify-center z-50"
+          onClick={handleClosePopup}
+        >
+          <div
+            className="bg-white rounded-xl p-10 shadow-lg text-center max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()} // Prevent closing on inner click
+          >
+            {isError ? (
+              // Error: Red X SVG (same as existing)
+              <div className="w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <svg
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  aria-hidden
+                >
+                  <path
+                    d="M6 6L18 18"
+                    stroke="#F04438"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M6 18L18 6"
+                    stroke="#F04438"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+            ) : (
+              // Success: CheckIcon
+              <Image
+                src={CheckIcon}
+                alt="check"
+                className="w-10 h-10 mx-auto mb-4"
+              />
+            )}
+            <p className="text-lg font-medium">{popupMessage}</p>
+            <button
+              onClick={handleClosePopup}
+              className="mt-4 px-6 py-2 bg-primary text-white rounded-lg"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
